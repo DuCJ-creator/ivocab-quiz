@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 這裡可以放一些自定義的全域樣式，例如背景 */
+body {
+  background-color: #f8fafc;
+}
