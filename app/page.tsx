@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { BookOpen, CheckCircle, XCircle, Printer, RotateCcw, Award, ArrowRight, Library, Sparkles, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { CheckCircle, XCircle, Printer, RotateCcw, Award, Sparkles, BookOpen, AlertTriangle } from 'lucide-react';
 import { fetchAndParseCSV, VocabWord } from '@/lib/csv';
 
 // Helper: Shuffle Array
@@ -23,14 +23,13 @@ export default function Home() {
   const [fullData, setFullData] = useState<VocabWord[]>([]);
   const [availableUnits, setAvailableUnits] = useState<number[]>([]);
   const [selectedUnits, setSelectedUnits] = useState<number[]>([]);
-  const [questionCount, setQuestionCount] = useState(5); // Default to 5 to save API cost/time
+  const [questionCount, setQuestionCount] = useState(10);
   const [isLoadingCSV, setIsLoadingCSV] = useState(false);
   
   // Quiz State
   const [quizData, setQuizData] = useState<any[]>([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
-  const [score, setScore] = useState(0);
   
   // User Info for Print
   const [userInfo, setUserInfo] = useState({ classNo: '', seatNo: '', name: '' });
@@ -60,13 +59,12 @@ export default function Home() {
     );
   };
 
-  // 3. START QUIZ: Pick words locally, then ask API for sentences
+  // 3. START QUIZ
   const handleStartQuiz = async () => {
     if (selectedUnits.length === 0) return alert("請至少選擇一個單元");
     
     setStep('generating');
 
-    // A. Filter words by selected units
     const unitWords = fullData.filter(w => selectedUnits.includes(parseInt(w.unit)));
     
     if (unitWords.length < 5) {
@@ -74,11 +72,9 @@ export default function Home() {
       return alert("該範圍單字不足，請增加範圍");
     }
 
-    // B. Randomly select Target Words based on Question Count
     const targets = shuffleArray(unitWords).slice(0, questionCount);
 
     try {
-      // C. Call Backend API to get sentences
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,13 +85,10 @@ export default function Home() {
       
       const { questions } = await response.json();
 
-      // D. Assemble final quiz data (Merge AI sentences with Local Distractors)
       const finalQuiz = questions.map((q: any) => {
         const originalWordObj = targets.find(t => t.word === q.word);
         if (!originalWordObj) return null;
 
-        // Generate Distractors locally (fast & free)
-        // Priority: Same Unit -> Same Level -> All Data
         let pool = unitWords.filter(w => w.word !== q.word);
         if (pool.length < 3) pool = fullData.filter(w => w.word !== q.word);
         
@@ -103,7 +96,7 @@ export default function Home() {
         const options = shuffleArray([q.word, ...distractors]);
 
         return {
-          ...originalWordObj, // contains pos, meaning, etc.
+          ...originalWordObj,
           sentence: q.sentence,
           options
         };
@@ -112,72 +105,92 @@ export default function Home() {
       setQuizData(finalQuiz);
       setCurrentQIndex(0);
       setUserAnswers({});
-      setScore(0);
       setStep('quiz');
 
     } catch (error) {
       console.error(error);
-      alert("生成題目失敗，可能是 API 連線問題。請稍後再試。");
+      alert("生成題目失敗，請稍後再試。");
       setStep('setup');
     }
   };
 
-  // 4. Quiz Logic
+  // 4. Quiz Logic (Auto Advance)
   const handleAnswer = (answer: string) => {
+    // Prevent multiple clicks for the same question
+    if (userAnswers[currentQIndex]) return;
+
+    // Record Answer
     setUserAnswers(prev => ({ ...prev, [currentQIndex]: answer }));
+
+    // Auto advance timer (1 second delay to see feedback)
+    setTimeout(() => {
+      if (currentQIndex < quizData.length - 1) {
+        setCurrentQIndex(prev => prev + 1);
+      } else {
+        setStep('result');
+      }
+    }, 1000); 
   };
 
-  const handleNext = () => {
-    if (currentQIndex < quizData.length - 1) {
-      setCurrentQIndex(prev => prev + 1);
-    } else {
-      // Calculate Score
-      const correctCount = quizData.reduce((acc, q, idx) => {
-        return acc + (userAnswers[idx] === q.word ? 1 : 0);
-      }, 0);
-      setScore(correctCount);
-      setStep('result');
-    }
+  // Calculate score derived from state
+  const calculateScore = () => {
+    return quizData.reduce((acc, q, idx) => {
+      return acc + (userAnswers[idx] === q.word ? 1 : 0);
+    }, 0);
   };
 
   // --- RENDER ---
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-indigo-100 font-sans text-gray-800 print:bg-white">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 print:bg-white">
       
-      {/* HEADER */}
-      <nav className="p-4 bg-white/80 backdrop-blur-md sticky top-0 z-10 border-b border-gray-200 print:hidden">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-xl text-indigo-700">
-            <Library className="w-6 h-6" />
-            Shirley's iVocab Quiz
+      {/* HEADER - Advanced & Professional Style */}
+      <nav className="bg-slate-900 text-white shadow-lg print:hidden">
+        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-teal-500 rounded-lg">
+              <BookOpen className="w-8 h-8 text-slate-900" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-serif font-bold tracking-wide text-teal-50">
+                Shirley's iVocab Quiz
+              </h1>
+              <p className="text-teal-400 text-sm font-medium tracking-widest uppercase mt-1">
+                GSAT 字彙題型 • 互動練習平台
+              </p>
+            </div>
           </div>
-          <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-             Powered by AI
+          <div className="text-right hidden md:block">
+            <div className="text-xs text-slate-400">Powered by OpenAI & Vercel</div>
+            <div className="text-xs text-slate-500 mt-1">Automatic Grading System</div>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-4xl mx-auto p-4 md:py-10 print:p-0 print:max-w-none">
+      <main className="max-w-4xl mx-auto p-6 md:py-12 print:p-0 print:max-w-none">
         
         {/* SETUP SCREEN */}
         {step === 'setup' && (
-          <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl p-6 md:p-10 border border-white">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              <Sparkles className="w-6 h-6 text-yellow-500" /> 設定測驗範圍
-            </h2>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 md:p-12 animate-fade-in">
+            <div className="border-b border-slate-100 pb-6 mb-8">
+              <h2 className="text-2xl font-serif font-bold text-slate-800 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-teal-600" /> 
+                Configure Assessment
+              </h2>
+              <p className="text-slate-500 mt-2">請設定您的測驗範圍與難度</p>
+            </div>
 
             {/* Level Selector */}
             <div className="mb-8">
-              <label className="block text-sm font-medium text-gray-500 mb-3">難度等級 (Level)</label>
+              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Level</label>
               <div className="flex flex-wrap gap-2">
                 {[1, 2, 3, 4, 5, 6].map(lvl => (
                   <button
                     key={lvl}
                     onClick={() => setSelectedLevel(lvl)}
-                    className={`px-5 py-2 rounded-full font-semibold transition-all ${
+                    className={`px-6 py-2 rounded-md font-medium transition-all duration-200 border ${
                       selectedLevel === lvl 
-                        ? 'bg-indigo-600 text-white shadow-lg scale-105' 
-                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                        ? 'bg-slate-800 text-white border-slate-800 shadow-md' 
+                        : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
                     }`}
                   >
                     Level {lvl}
@@ -188,20 +201,20 @@ export default function Home() {
 
             {/* Unit Selector */}
             <div className="mb-8">
-              <label className="block text-sm font-medium text-gray-500 mb-3">單元選擇 (Units)</label>
+              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Units (Scope)</label>
               {isLoadingCSV ? (
-                <div className="flex items-center gap-2 text-gray-400 animate-pulse">讀取單字庫中...</div>
+                <div className="flex items-center gap-2 text-slate-400 animate-pulse text-sm">Synchronizing Database...</div>
               ) : (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 max-h-48 overflow-y-auto">
+                <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 max-h-56 overflow-y-auto custom-scrollbar">
                   <div className="flex flex-wrap gap-2">
                     {availableUnits.map(unit => (
                       <button
                         key={unit}
                         onClick={() => toggleUnit(unit)}
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all ${
+                        className={`w-12 h-12 rounded-md flex items-center justify-center text-sm font-bold transition-all ${
                           selectedUnits.includes(unit)
-                            ? 'bg-indigo-500 text-white shadow-md'
-                            : 'bg-white border border-gray-200 text-gray-400 hover:border-indigo-300'
+                            ? 'bg-teal-600 text-white shadow-sm'
+                            : 'bg-white border border-slate-200 text-slate-400 hover:border-teal-400 hover:text-teal-600'
                         }`}
                       >
                         {unit}
@@ -210,21 +223,21 @@ export default function Home() {
                   </div>
                 </div>
               )}
-              <p className="text-xs text-gray-400 mt-2">已選擇 {selectedUnits.length} 個單元</p>
+              <p className="text-xs text-slate-400 mt-2 text-right">Selected Units: {selectedUnits.length}</p>
             </div>
 
             {/* Question Count */}
             <div className="mb-10">
-              <label className="block text-sm font-medium text-gray-500 mb-3">題數</label>
-              <div className="grid grid-cols-4 gap-3">
+              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Questions</label>
+              <div className="grid grid-cols-4 gap-4">
                 {[5, 10, 20, 30].map(count => (
                   <button
                     key={count}
                     onClick={() => setQuestionCount(count)}
-                    className={`py-3 rounded-xl border transition-all font-medium ${
+                    className={`py-3 rounded-md border transition-all font-medium ${
                       questionCount === count
-                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                        ? 'border-teal-600 bg-teal-50 text-teal-800 ring-1 ring-teal-600'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-400'
                     }`}
                   >
                     {count}
@@ -236,149 +249,172 @@ export default function Home() {
             <button
               onClick={handleStartQuiz}
               disabled={selectedUnits.length === 0}
-              className="w-full py-4 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-xl font-bold text-lg shadow-xl hover:shadow-2xl hover:scale-[1.01] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-4 bg-slate-900 text-white rounded-lg font-bold text-lg hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              開始生成題目 (AI) <Sparkles className="w-5 h-5" />
+              Start Quiz
             </button>
+
+            {/* Bilingual Warning */}
+            <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+              <div className="flex items-center justify-center gap-2 text-amber-600 mb-2">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase">Disclaimer</span>
+              </div>
+              <p className="text-xs text-slate-500 italic leading-relaxed max-w-2xl mx-auto">
+                Kindly note that the quiz questions are thoughtfully crafted by AI—and while every effort is made for accuracy, occasional slips may still occur.
+                <br/>
+                敬請留意：本測驗題目由人工智慧精心生成，雖力求準確，偶有疏漏仍在所難免。
+              </p>
+            </div>
           </div>
         )}
 
-        {/* LOADING AI SCREEN */}
+        {/* LOADING SCREEN */}
         {step === 'generating' && (
-          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4">
-            <div className="relative w-20 h-20 mb-6">
-              <div className="absolute top-0 left-0 w-full h-full border-4 border-indigo-200 rounded-full animate-ping"></div>
-              <div className="absolute top-0 left-0 w-full h-full border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
-            </div>
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">AI 正在撰寫題目...</h3>
-            <p className="text-gray-500 max-w-md">
-              正在為您選定的 {selectedLevel} 級單字生成符合 A2-C1 難度的例句，請稍候。
-            </p>
+          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 animate-fade-in">
+            <div className="w-16 h-16 border-4 border-slate-200 border-t-teal-600 rounded-full animate-spin mb-6"></div>
+            <h3 className="text-xl font-serif font-bold text-slate-800 mb-2">Generating Assessment...</h3>
+            <p className="text-slate-500 text-sm">Crafting GSAT-style questions based on your selection.</p>
           </div>
         )}
 
         {/* QUIZ SCREEN */}
         {step === 'quiz' && quizData.length > 0 && (
-          <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden border border-white">
-            {/* Progress Bar */}
-            <div className="h-2 bg-gray-100">
-              <div 
-                className="h-full bg-indigo-500 transition-all duration-500 ease-out" 
-                style={{ width: `${((currentQIndex + 1) / quizData.length) * 100}%` }}
-              ></div>
+          <div className="max-w-3xl mx-auto">
+            {/* Progress Indicator */}
+            <div className="mb-6 flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
+              <span>Question {currentQIndex + 1} of {quizData.length}</span>
+              <span>Level {quizData[currentQIndex].level}</span>
             </div>
 
-            <div className="p-6 md:p-10">
-              <div className="flex justify-between items-center mb-8">
-                <span className="text-sm font-mono text-gray-400">Q{currentQIndex + 1} / {quizData.length}</span>
-                <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded font-bold">
-                  Level {quizData[currentQIndex].level} - Unit {quizData[currentQIndex].unit}
-                </span>
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-slate-200">
+              <div className="h-1.5 bg-slate-100">
+                <div 
+                  className="h-full bg-teal-500 transition-all duration-700 ease-out" 
+                  style={{ width: `${((currentQIndex + 1) / quizData.length) * 100}%` }}
+                ></div>
               </div>
 
-              {/* Question Card */}
-              <div className="mb-8">
-                <h3 className="text-xl md:text-2xl font-medium leading-relaxed text-gray-800 mb-4">
-                  {quizData[currentQIndex].sentence.split('______').map((part: string, i: number) => (
-                    <span key={i}>
-                      {part}
-                      {i === 0 && (
-                        <span className="inline-block w-24 border-b-2 border-indigo-400 mx-1 relative top-1"></span>
-                      )}
+              <div className="p-8 md:p-12">
+                {/* Question Sentence */}
+                <div className="mb-10">
+                  <h3 className="text-xl md:text-2xl font-serif leading-relaxed text-slate-800">
+                    {quizData[currentQIndex].sentence.split('______').map((part: string, i: number) => (
+                      <span key={i}>
+                        {part}
+                        {i === 0 && (
+                          <span className="inline-block w-32 border-b-2 border-slate-800 mx-2 relative top-1"></span>
+                        )}
+                      </span>
+                    ))}
+                  </h3>
+                  
+                  {/* Subtle POS Hint - NO CHINESE */}
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200">
+                      Hint: {quizData[currentQIndex].pos}
                     </span>
-                  ))}
-                </h3>
-                <div className="flex gap-3 text-sm text-gray-500 mt-4 bg-gray-50 p-3 rounded-lg inline-block">
-                   <span className="font-bold">提示:</span> 
-                   <span>{quizData[currentQIndex].meaning}</span>
-                   <span className="text-gray-300">|</span>
-                   <span className="italic">{quizData[currentQIndex].pos}</span>
+                  </div>
+                </div>
+
+                {/* Options Grid */}
+                <div className="grid grid-cols-1 gap-3">
+                  {quizData[currentQIndex].options.map((opt: string, idx: number) => {
+                    const isSelected = userAnswers[currentQIndex] === opt;
+                    const isCorrect = opt === quizData[currentQIndex].word;
+                    
+                    // Logic to determine button style
+                    let btnStyle = "border-slate-200 hover:bg-slate-50 text-slate-600"; // default
+                    
+                    if (userAnswers[currentQIndex]) { // If answered
+                        if (isSelected && isCorrect) {
+                            btnStyle = "border-teal-500 bg-teal-50 text-teal-800 font-bold ring-1 ring-teal-500";
+                        } else if (isSelected && !isCorrect) {
+                            btnStyle = "border-red-500 bg-red-50 text-red-800 ring-1 ring-red-500";
+                        } else if (!isSelected && isCorrect) {
+                            // Show correct answer if user got it wrong
+                            btnStyle = "border-teal-500 bg-teal-50 text-teal-800 ring-1 ring-teal-500 opacity-70";
+                        } else {
+                            btnStyle = "border-slate-100 text-slate-300 opacity-50";
+                        }
+                    }
+
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => handleAnswer(opt)}
+                        disabled={!!userAnswers[currentQIndex]}
+                        className={`p-4 rounded-lg border-2 text-left transition-all duration-200 flex items-center justify-between group ${btnStyle}`}
+                      >
+                        <span className="text-lg">{opt}</span>
+                        {userAnswers[currentQIndex] && isCorrect && <CheckCircle className="w-5 h-5 text-teal-600" />}
+                        {userAnswers[currentQIndex] && isSelected && !isCorrect && <XCircle className="w-5 h-5 text-red-500" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* Options */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {quizData[currentQIndex].options.map((opt: string, idx: number) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleAnswer(opt)}
-                    className={`p-4 rounded-xl border-2 text-left transition-all hover:shadow-md flex items-center justify-between group ${
-                      userAnswers[currentQIndex] === opt
-                        ? 'border-indigo-600 bg-indigo-50 ring-1 ring-indigo-600'
-                        : 'border-gray-100 bg-white hover:border-indigo-200'
-                    }`}
-                  >
-                    <span className={`text-lg font-medium ${userAnswers[currentQIndex] === opt ? 'text-indigo-900' : 'text-gray-600'}`}>
-                      {opt}
-                    </span>
-                    {userAnswers[currentQIndex] === opt && <CheckCircle className="w-5 h-5 text-indigo-600" />}
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-8 flex justify-end">
-                <button
-                  onClick={handleNext}
-                  disabled={!userAnswers[currentQIndex]}
-                  className="px-8 py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-colors disabled:opacity-30 flex items-center gap-2"
-                >
-                  {currentQIndex === quizData.length - 1 ? '提交答案' : '下一題'} <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
+            </div>
+            <div className="text-center mt-6 text-slate-400 text-sm italic">
+                Select an option to automatically proceed.
             </div>
           </div>
         )}
 
         {/* RESULT SCREEN */}
         {step === 'result' && (
-          <div className="bg-white rounded-none md:rounded-3xl shadow-none md:shadow-2xl overflow-hidden print:shadow-none print:w-full">
+          <div className="bg-white max-w-4xl mx-auto print:w-full">
             
             {/* Screen Header */}
-            <div className="bg-gray-900 text-white p-10 text-center print:hidden">
-              <Award className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
-              <h2 className="text-3xl font-bold mb-2">測驗完成</h2>
-              <div className="text-6xl font-black my-4 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600">
-                {score} <span className="text-2xl text-gray-500 font-normal">/ {quizData.length}</span>
+            <div className="bg-slate-900 text-white p-12 text-center rounded-xl shadow-xl mb-8 print:hidden">
+              <Award className="w-16 h-16 text-teal-400 mx-auto mb-4" />
+              <h2 className="text-3xl font-serif font-bold mb-2">Assessment Complete</h2>
+              <div className="text-6xl font-black my-6 text-teal-400">
+                {calculateScore()} <span className="text-2xl text-slate-500 font-normal">/ {quizData.length}</span>
               </div>
-              <p className="text-gray-400">請填寫下方資訊並列印您的成績單</p>
+              <p className="text-slate-400">Please fill in your details below to print the official report.</p>
             </div>
 
-            {/* Print Header (Only visible when printing) */}
-            <div className="hidden print:block text-center mb-6 pb-4 border-b-2 border-black pt-4">
-              <h1 className="text-2xl font-bold">Shirley's iVocab Quiz Result</h1>
-              <p className="text-sm mt-1">Date: {new Date().toLocaleDateString()}</p>
+            {/* Print Header */}
+            <div className="hidden print:block mb-8 pb-4 border-b-2 border-black">
+              <div className="flex justify-between items-end">
+                <div>
+                  <h1 className="text-2xl font-serif font-bold text-black">Shirley's iVocab Quiz (GSAT)</h1>
+                  <p className="text-sm mt-1 text-gray-600">Performance Report</p>
+                </div>
+                <div className="text-right text-sm">
+                  <p>Date: {new Date().toLocaleDateString()}</p>
+                </div>
+              </div>
             </div>
 
-            <div className="p-8 print:p-0">
+            <div className="print:p-0">
               
               {/* User Info Inputs */}
-              <div className="grid grid-cols-3 gap-6 mb-8 bg-gray-50 p-6 rounded-xl border border-gray-200 print:bg-white print:border-none print:p-0 print:gap-4 print:text-sm">
+              <div className="grid grid-cols-3 gap-8 mb-10 bg-slate-50 p-8 rounded-lg border border-slate-200 print:bg-white print:border-none print:p-0 print:mb-6 print:gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Class</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Class</label>
                   <input 
                     type="text" 
-                    placeholder="例如: 901"
-                    className="w-full bg-transparent border-b border-gray-400 py-1 focus:outline-none focus:border-indigo-600 print:border-black"
+                    className="w-full bg-transparent border-b border-slate-300 py-1 focus:outline-none focus:border-teal-600 font-serif text-lg print:border-black"
                     value={userInfo.classNo}
                     onChange={e => setUserInfo({...userInfo, classNo: e.target.value})}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Seat No.</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Seat No.</label>
                   <input 
                     type="text" 
-                    placeholder="例如: 15"
-                    className="w-full bg-transparent border-b border-gray-400 py-1 focus:outline-none focus:border-indigo-600 print:border-black"
+                    className="w-full bg-transparent border-b border-slate-300 py-1 focus:outline-none focus:border-teal-600 font-serif text-lg print:border-black"
                     value={userInfo.seatNo}
                     onChange={e => setUserInfo({...userInfo, seatNo: e.target.value})}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Name</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Name</label>
                   <input 
                     type="text" 
-                    placeholder="姓名"
-                    className="w-full bg-transparent border-b border-gray-400 py-1 focus:outline-none focus:border-indigo-600 print:border-black"
+                    className="w-full bg-transparent border-b border-slate-300 py-1 focus:outline-none focus:border-teal-600 font-serif text-lg print:border-black"
                     value={userInfo.name}
                     onChange={e => setUserInfo({...userInfo, name: e.target.value})}
                   />
@@ -386,32 +422,36 @@ export default function Home() {
               </div>
 
               {/* Score Summary Row for Print */}
-              <div className="hidden print:flex justify-between items-center mb-4 border-b border-gray-300 pb-2 font-bold">
-                 <span>Level: {selectedLevel} (Units: {selectedUnits.join(',')})</span>
-                 <span>Score: {score} / {quizData.length}</span>
+              <div className="hidden print:flex justify-between items-center mb-6 border-b border-gray-900 pb-2 font-bold font-serif text-lg">
+                 <span>Level: {selectedLevel} (Units: {selectedUnits.join(', ')})</span>
+                 <span>Score: {calculateScore()} / {quizData.length}</span>
               </div>
 
               {/* Review List */}
               <div className="space-y-4">
-                <h3 className="font-bold text-gray-700 print:hidden">答題詳情</h3>
+                <h3 className="font-bold text-slate-700 uppercase tracking-wide text-sm mb-4 print:hidden">Detailed Review</h3>
                 {quizData.map((q, idx) => {
                   const isCorrect = userAnswers[idx] === q.word;
                   return (
-                    <div key={idx} className={`p-4 rounded-lg border flex gap-4 break-inside-avoid ${
+                    <div key={idx} className={`p-5 rounded-lg border flex gap-5 break-inside-avoid ${
                       isCorrect 
-                        ? 'bg-green-50 border-green-200 print:bg-white print:border-gray-200' 
-                        : 'bg-red-50 border-red-200 print:bg-white print:border-gray-200'
+                        ? 'bg-teal-50/50 border-teal-100 print:bg-white print:border-gray-200' 
+                        : 'bg-red-50/50 border-red-100 print:bg-white print:border-gray-200'
                     }`}>
-                      <div className="font-mono text-gray-400 pt-1">{idx + 1}.</div>
+                      <div className="font-mono text-slate-400 pt-1 text-sm">{String(idx + 1).padStart(2, '0')}.</div>
                       <div className="flex-1">
-                        {/* Sentence with answer filled in */}
-                        <p className="text-gray-800 mb-2 leading-relaxed">
+                        {/* Sentence */}
+                        <p className="text-slate-800 mb-2 leading-relaxed font-serif text-lg">
                           {q.sentence.split('______').map((part: string, i: number) => (
                             <span key={i}>
                               {part}
                               {i === 0 && (
-                                <span className={`font-bold px-1 underline decoration-2 ${isCorrect ? 'decoration-green-500 text-green-700' : 'decoration-red-500 text-red-700'}`}>
-                                  {userAnswers[idx] || '(Empty)'}
+                                <span className={`font-bold px-2 mx-1 border-b-2 ${
+                                    isCorrect 
+                                    ? 'border-teal-500 text-teal-800' 
+                                    : 'border-red-500 text-red-700'
+                                }`}>
+                                  {userAnswers[idx] || '(No Answer)'}
                                 </span>
                               )}
                             </span>
@@ -420,14 +460,16 @@ export default function Home() {
                         
                         {/* Correction if wrong */}
                         {!isCorrect && (
-                          <div className="text-sm text-red-600 flex items-center gap-1 mt-1">
+                          <div className="text-sm text-red-600 flex items-center gap-1 mt-2 font-medium">
                             <XCircle className="w-4 h-4" />
-                            Correct answer: <span className="font-bold">{q.word}</span>
+                            Correct Answer: <span className="font-bold underline">{q.word}</span>
                           </div>
                         )}
 
-                        <div className="mt-2 text-xs text-gray-400">
-                          {q.meaning} ({q.pos})
+                        {/* Meaning (Only shown in review) */}
+                        <div className="mt-3 pt-2 border-t border-slate-100 text-xs text-slate-500 flex gap-3">
+                          <span className="font-bold bg-slate-200 px-1 rounded text-slate-600">{q.pos}</span>
+                          <span>{q.meaning}</span>
                         </div>
                       </div>
                     </div>
@@ -436,18 +478,18 @@ export default function Home() {
               </div>
 
               {/* Actions */}
-              <div className="mt-8 flex justify-center gap-4 print:hidden">
+              <div className="mt-12 flex justify-center gap-4 print:hidden pb-12">
                 <button
                   onClick={() => window.location.reload()}
-                  className="px-6 py-3 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium flex items-center gap-2"
+                  className="px-8 py-3 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-2 transition-colors"
                 >
-                  <RotateCcw className="w-4 h-4" /> 重置
+                  <RotateCcw className="w-4 h-4" /> New Quiz
                 </button>
                 <button
                   onClick={() => window.print()}
-                  className="px-6 py-3 rounded-xl bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 font-medium flex items-center gap-2"
+                  className="px-8 py-3 rounded-lg bg-teal-600 text-white shadow-lg hover:bg-teal-700 font-medium flex items-center gap-2 transition-colors hover:shadow-xl"
                 >
-                  <Printer className="w-4 h-4" /> 列印結果
+                  <Printer className="w-4 h-4" /> Print Report
                 </button>
               </div>
             </div>
