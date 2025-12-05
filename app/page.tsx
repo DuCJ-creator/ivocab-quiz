@@ -116,13 +116,10 @@ export default function Home() {
 
   // 4. Quiz Logic (Auto Advance)
   const handleAnswer = (answer: string) => {
-    // Prevent multiple clicks for the same question
     if (userAnswers[currentQIndex]) return;
 
-    // Record Answer
     setUserAnswers(prev => ({ ...prev, [currentQIndex]: answer }));
 
-    // Auto advance timer (1 second delay to see feedback)
     setTimeout(() => {
       if (currentQIndex < quizData.length - 1) {
         setCurrentQIndex(prev => prev + 1);
@@ -132,7 +129,6 @@ export default function Home() {
     }, 1000); 
   };
 
-  // Calculate score derived from state
   const calculateScore = () => {
     return quizData.reduce((acc, q, idx) => {
       return acc + (userAnswers[idx] === q.word ? 1 : 0);
@@ -143,7 +139,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 print:bg-white">
       
-      {/* HEADER - Advanced & Professional Style */}
+      {/* HEADER */}
       <nav className="bg-slate-900 text-white shadow-lg print:hidden">
         <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -323,16 +319,14 @@ export default function Home() {
                     const isSelected = userAnswers[currentQIndex] === opt;
                     const isCorrect = opt === quizData[currentQIndex].word;
                     
-                    // Logic to determine button style
-                    let btnStyle = "border-slate-200 hover:bg-slate-50 text-slate-600"; // default
+                    let btnStyle = "border-slate-200 hover:bg-slate-50 text-slate-600";
                     
-                    if (userAnswers[currentQIndex]) { // If answered
+                    if (userAnswers[currentQIndex]) {
                         if (isSelected && isCorrect) {
                             btnStyle = "border-teal-500 bg-teal-50 text-teal-800 font-bold ring-1 ring-teal-500";
                         } else if (isSelected && !isCorrect) {
                             btnStyle = "border-red-500 bg-red-50 text-red-800 ring-1 ring-red-500";
                         } else if (!isSelected && isCorrect) {
-                            // Show correct answer if user got it wrong
                             btnStyle = "border-teal-500 bg-teal-50 text-teal-800 ring-1 ring-teal-500 opacity-70";
                         } else {
                             btnStyle = "border-slate-100 text-slate-300 opacity-50";
@@ -466,10 +460,20 @@ export default function Home() {
                           </div>
                         )}
 
-                        {/* Meaning (Only shown in review) */}
-                        <div className="mt-3 pt-2 border-t border-slate-100 text-xs text-slate-500 flex gap-3">
-                          <span className="font-bold bg-slate-200 px-1 rounded text-slate-600">{q.pos}</span>
-                          <span>{q.meaning}</span>
+                        {/* Metadata Footer: Source + POS + Meaning */}
+                        <div className="mt-3 pt-2 border-t border-slate-100 text-xs text-slate-500 flex flex-wrap items-center gap-3">
+                          {/* Part of Speech */}
+                          <span className="font-bold bg-slate-200 px-2 py-0.5 rounded text-slate-600">
+                            {q.pos}
+                          </span>
+                          
+                          {/* NEW: Source Tag (Level-Unit-No) */}
+                          <span className="font-mono font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
+                            {`L${q.level}-U${q.unit}-${q.no}`}
+                          </span>
+
+                          {/* Meaning */}
+                          <span className="text-slate-600">{q.meaning}</span>
                         </div>
                       </div>
                     </div>
