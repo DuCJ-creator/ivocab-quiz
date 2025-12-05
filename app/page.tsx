@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, XCircle, Printer, RotateCcw, Award, Sparkles, BookOpen, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, Printer, RotateCcw, Award, Sparkles, BookOpen, FileText, MonitorPlay, Edit3 } from 'lucide-react';
 import { fetchAndParseCSV, VocabWord } from '@/lib/csv';
 
 // Helper: Shuffle Array
@@ -14,16 +14,20 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return newArray;
 };
 
+// Helper: Get Letter for Index (0->A, 1->B...)
+const getOptionLabel = (index: number) => String.fromCharCode(65 + index);
+
 export default function Home() {
-  // Application State
+  // Mode: 'online' (interactive) or 'paper' (printable view)
+  const [mode, setMode] = useState<'online' | 'paper'>('online');
   const [step, setStep] = useState<'setup' | 'generating' | 'quiz' | 'result'>('setup');
   
-  // Setup State
+  // Data State
   const [selectedLevel, setSelectedLevel] = useState(1);
   const [fullData, setFullData] = useState<VocabWord[]>([]);
   const [availableUnits, setAvailableUnits] = useState<number[]>([]);
   const [selectedUnits, setSelectedUnits] = useState<number[]>([]);
-  const [questionCount, setQuestionCount] = useState(10);
+  const [questionCount, setQuestionCount] = useState(10); // Default for online
   const [isLoadingCSV, setIsLoadingCSV] = useState(false);
   
   // Quiz State
@@ -31,48 +35,46 @@ export default function Home() {
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   
-  // User Info for Print
-  const [userInfo, setUserInfo] = useState({ classNo: '', seatNo: '', name: '' });
+  // Paper specific state
+  const paperRef = useRef<HTMLDivElement>(null);
 
-  // 1. Load CSV when Level changes
+  // Load Data
   useEffect(() => {
     const loadData = async () => {
       setIsLoadingCSV(true);
       const data = await fetchAndParseCSV(selectedLevel);
       setFullData(data);
-      
       const units = [...new Set(data.map(item => parseInt(item.unit)))].sort((a, b) => a - b);
       setAvailableUnits(units);
       if (units.length > 0) setSelectedUnits([units[0]]);
-      
       setIsLoadingCSV(false);
     };
     loadData();
   }, [selectedLevel]);
 
-  // 2. Handle Unit Selection
   const toggleUnit = (unit: number) => {
-    setSelectedUnits(prev => 
-      prev.includes(unit) 
-        ? prev.filter(u => u !== unit) 
-        : [...prev, unit].sort((a, b) => a - b)
-    );
+    setSelectedUnits(prev => prev.includes(unit) ? prev.filter(u => u !== unit) : [...prev, unit].sort((a, b) => a - b));
   };
 
-  // 3. START QUIZ
-  const handleStartQuiz = async () => {
+  // Main Generator Logic
+  const generateQuiz = async (targetMode: 'online' | 'paper') => {
     if (selectedUnits.length === 0) return alert("請至少選擇一個單元");
     
+    // For Paper mode, force 30 questions (or max available)
+    const targetCount = targetMode === 'paper' ? 30 : questionCount;
+
     setStep('generating');
+    setMode(targetMode);
 
     const unitWords = fullData.filter(w => selectedUnits.includes(parseInt(w.unit)));
     
     if (unitWords.length < 5) {
       setStep('setup');
-      return alert("該範圍單字不足，請增加範圍");
+      return alert("該範圍單字不足以生成測驗，請增加範圍。");
     }
 
-    const targets = shuffleArray(unitWords).slice(0, questionCount);
+    // Prepare target words
+    const targets = shuffleArray(unitWords).slice(0, targetCount);
 
     try {
       const response = await fetch('/api/generate', {
@@ -84,28 +86,30 @@ export default function Home() {
       if (!response.ok) throw new Error("API Error");
       
       const { questions } = await response.json();
-
+      
       const finalQuiz = questions.map((q: any) => {
         const originalWordObj = targets.find(t => t.word === q.word);
         if (!originalWordObj) return null;
 
+        // Generate Distractors
         let pool = unitWords.filter(w => w.word !== q.word);
+        // If unit pool is too small, expand to full level
         if (pool.length < 3) pool = fullData.filter(w => w.word !== q.word);
         
         const distractors = shuffleArray(pool).slice(0, 3).map(w => w.word);
         const options = shuffleArray([q.word, ...distractors]);
 
-        return {
-          ...originalWordObj,
-          sentence: q.sentence,
-          options
+        return { 
+          ...originalWordObj, 
+          sentence: q.sentence, 
+          options 
         };
       }).filter(Boolean);
 
       setQuizData(finalQuiz);
       setCurrentQIndex(0);
       setUserAnswers({});
-      setStep('quiz');
+      setStep(targetMode === 'online' ? 'quiz' : 'result'); // Paper goes straight to result view
 
     } catch (error) {
       console.error(error);
@@ -114,392 +118,288 @@ export default function Home() {
     }
   };
 
-  // 4. Quiz Logic (Auto Advance)
   const handleAnswer = (answer: string) => {
     if (userAnswers[currentQIndex]) return;
-
     setUserAnswers(prev => ({ ...prev, [currentQIndex]: answer }));
-
     setTimeout(() => {
-      if (currentQIndex < quizData.length - 1) {
-        setCurrentQIndex(prev => prev + 1);
-      } else {
-        setStep('result');
-      }
+      if (currentQIndex < quizData.length - 1) setCurrentQIndex(prev => prev + 1);
+      else setStep('result');
     }, 1000); 
   };
 
-  const calculateScore = () => {
-    return quizData.reduce((acc, q, idx) => {
-      return acc + (userAnswers[idx] === q.word ? 1 : 0);
-    }, 0);
-  };
+  const calculateScore = () => quizData.reduce((acc, q, idx) => acc + (userAnswers[idx] === q.word ? 1 : 0), 0);
 
-  // --- RENDER ---
+  // Helper to find word info for review
+  const getWordInfo = (word: string) => fullData.find(w => w.word === word);
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 print:bg-white">
-      
-      {/* HEADER */}
+      {/* Navigation - Hidden when printing */}
       <nav className="bg-slate-900 text-white shadow-lg print:hidden">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="max-w-6xl mx-auto px-6 py-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-teal-500 rounded-lg">
-              <BookOpen className="w-8 h-8 text-slate-900" />
-            </div>
+            <div className="p-2 bg-teal-500 rounded-lg"><BookOpen className="w-8 h-8 text-slate-900" /></div>
             <div>
-              <h1 className="text-3xl font-serif font-bold tracking-wide text-teal-50">
-                Shirley's iVocab Quiz
-              </h1>
-              <p className="text-teal-400 text-sm font-medium tracking-widest uppercase mt-1">
-                GSAT 字彙題型 • 互動練習平台
-              </p>
+              <h1 className="text-3xl font-serif font-bold tracking-wide text-teal-50">Shirley's iVocab Quiz</h1>
+              <p className="text-teal-400 text-sm font-medium tracking-widest uppercase mt-1">GSAT 字彙題型 • 互動練習平台</p>
             </div>
           </div>
-          <div className="text-right hidden md:block">
-            <div className="text-xs text-slate-400">Powered by OpenAI & Vercel</div>
-            <div className="text-xs text-slate-500 mt-1">Automatic Grading System</div>
-          </div>
+          {step !== 'setup' && (
+             <button onClick={() => window.location.reload()} className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors">
+               <RotateCcw className="w-4 h-4" /> Reset
+             </button>
+          )}
         </div>
       </nav>
 
-      <main className="max-w-4xl mx-auto p-6 md:py-12 print:p-0 print:max-w-none">
+      <main className="max-w-4xl mx-auto p-6 md:py-12 print:p-0 print:max-w-none print:w-full">
         
         {/* SETUP SCREEN */}
         {step === 'setup' && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 md:p-12 animate-fade-in">
-            <div className="border-b border-slate-100 pb-6 mb-8">
-              <h2 className="text-2xl font-serif font-bold text-slate-800 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-teal-600" /> 
-                Configure Assessment
-              </h2>
-              <p className="text-slate-500 mt-2">請設定您的測驗範圍與難度</p>
-            </div>
-
-            {/* Level Selector */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 md:p-12">
+            <h2 className="text-2xl font-serif font-bold text-slate-800 flex items-center gap-2 mb-8"><Sparkles className="w-5 h-5 text-teal-600" /> Configure Assessment</h2>
+            
+            {/* Level Selection */}
             <div className="mb-8">
               <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Level</label>
-              <div className="flex flex-wrap gap-2">
-                {[1, 2, 3, 4, 5, 6].map(lvl => (
-                  <button
-                    key={lvl}
-                    onClick={() => setSelectedLevel(lvl)}
-                    className={`px-6 py-2 rounded-md font-medium transition-all duration-200 border ${
-                      selectedLevel === lvl 
-                        ? 'bg-slate-800 text-white border-slate-800 shadow-md' 
-                        : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    Level {lvl}
-                  </button>
-                ))}
-              </div>
+              <div className="flex flex-wrap gap-2">{[1, 2, 3, 4, 5, 6].map(lvl => (<button key={lvl} onClick={() => setSelectedLevel(lvl)} className={`px-6 py-2 rounded-md font-medium border ${selectedLevel === lvl ? 'bg-slate-800 text-white' : 'bg-white text-slate-600'}`}>Level {lvl}</button>))}</div>
             </div>
 
-            {/* Unit Selector */}
+            {/* Unit Selection */}
             <div className="mb-8">
-              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Units (Scope)</label>
-              {isLoadingCSV ? (
-                <div className="flex items-center gap-2 text-slate-400 animate-pulse text-sm">Synchronizing Database...</div>
-              ) : (
-                <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 max-h-56 overflow-y-auto custom-scrollbar">
-                  <div className="flex flex-wrap gap-2">
-                    {availableUnits.map(unit => (
-                      <button
-                        key={unit}
-                        onClick={() => toggleUnit(unit)}
-                        className={`w-12 h-12 rounded-md flex items-center justify-center text-sm font-bold transition-all ${
-                          selectedUnits.includes(unit)
-                            ? 'bg-teal-600 text-white shadow-sm'
-                            : 'bg-white border border-slate-200 text-slate-400 hover:border-teal-400 hover:text-teal-600'
-                        }`}
-                      >
-                        {unit}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <p className="text-xs text-slate-400 mt-2 text-right">Selected Units: {selectedUnits.length}</p>
+              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Units</label>
+              {isLoadingCSV ? <div className="animate-pulse text-slate-400">Loading Dictionary...</div> : <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 max-h-56 overflow-y-auto"><div className="flex flex-wrap gap-2">{availableUnits.map(unit => (<button key={unit} onClick={() => toggleUnit(unit)} className={`w-12 h-12 rounded-md font-bold text-sm ${selectedUnits.includes(unit) ? 'bg-teal-600 text-white' : 'bg-white border text-slate-400'}`}>{unit}</button>))}</div></div>}
             </div>
 
-            {/* Question Count */}
+            {/* Questions Count (Online Only) */}
             <div className="mb-10">
-              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Questions</label>
-              <div className="grid grid-cols-4 gap-4">
-                {[5, 10, 20, 30].map(count => (
-                  <button
-                    key={count}
-                    onClick={() => setQuestionCount(count)}
-                    className={`py-3 rounded-md border transition-all font-medium ${
-                      questionCount === count
-                        ? 'border-teal-600 bg-teal-50 text-teal-800 ring-1 ring-teal-600'
-                        : 'border-slate-200 text-slate-600 hover:border-slate-400'
-                    }`}
-                  >
-                    {count}
-                  </button>
-                ))}
-              </div>
+              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Questions (Online Mode Only)</label>
+              <div className="grid grid-cols-4 gap-4">{[5, 10, 20, 30].map(count => (<button key={count} onClick={() => setQuestionCount(count)} className={`py-3 rounded-md border font-medium ${questionCount === count ? 'border-teal-600 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600'}`}>{count}</button>))}</div>
             </div>
 
-            <button
-              onClick={handleStartQuiz}
-              disabled={selectedUnits.length === 0}
-              className="w-full py-4 bg-slate-900 text-white rounded-lg font-bold text-lg hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              Start Quiz
-            </button>
-
-            {/* Bilingual Warning */}
-            <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-              <div className="flex items-center justify-center gap-2 text-amber-600 mb-2">
-                <AlertTriangle className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase">Disclaimer</span>
-              </div>
-              <p className="text-xs text-slate-500 italic leading-relaxed max-w-2xl mx-auto">
-                Kindly note that the quiz questions are thoughtfully crafted by AI—and while every effort is made for accuracy, occasional slips may still occur.
-                <br/>
-                敬請留意：本測驗題目由人工智慧精心生成，雖力求準確，偶有疏漏仍在所難免。
-              </p>
+            {/* Action Buttons */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button onClick={() => generateQuiz('online')} disabled={selectedUnits.length === 0} className="w-full py-4 bg-slate-900 text-white rounded-lg font-bold text-lg hover:bg-slate-800 shadow-lg flex justify-center items-center gap-2">
+                <MonitorPlay className="w-5 h-5" /> Start Online Quiz
+              </button>
+              <button onClick={() => generateQuiz('paper')} disabled={selectedUnits.length === 0} className="w-full py-4 bg-white border-2 border-slate-900 text-slate-900 rounded-lg font-bold text-lg hover:bg-slate-50 shadow-sm flex justify-center items-center gap-2">
+                <FileText className="w-5 h-5" /> Generate Paper Quiz
+              </button>
             </div>
-          </div>
-        )}
-
-        {/* LOADING SCREEN */}
-        {step === 'generating' && (
-          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4 animate-fade-in">
-            <div className="w-16 h-16 border-4 border-slate-200 border-t-teal-600 rounded-full animate-spin mb-6"></div>
-            <h3 className="text-xl font-serif font-bold text-slate-800 mb-2">Generating Assessment...</h3>
-            <p className="text-slate-500 text-sm">Crafting GSAT-style questions based on your selection.</p>
-          </div>
-        )}
-
-        {/* QUIZ SCREEN */}
-        {step === 'quiz' && quizData.length > 0 && (
-          <div className="max-w-3xl mx-auto">
-            {/* Progress Indicator */}
-            <div className="mb-6 flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
-              <span>Question {currentQIndex + 1} of {quizData.length}</span>
-              <span>Level {quizData[currentQIndex].level}</span>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-slate-200">
-              <div className="h-1.5 bg-slate-100">
-                <div 
-                  className="h-full bg-teal-500 transition-all duration-700 ease-out" 
-                  style={{ width: `${((currentQIndex + 1) / quizData.length) * 100}%` }}
-                ></div>
-              </div>
-
-              <div className="p-8 md:p-12">
-                {/* Question Sentence */}
-                <div className="mb-10">
-                  <h3 className="text-xl md:text-2xl font-serif leading-relaxed text-slate-800">
-                    {quizData[currentQIndex].sentence.split('______').map((part: string, i: number) => (
-                      <span key={i}>
-                        {part}
-                        {i === 0 && (
-                          <span className="inline-block w-32 border-b-2 border-slate-800 mx-2 relative top-1"></span>
-                        )}
-                      </span>
-                    ))}
-                  </h3>
-                  
-                  {/* Subtle POS Hint - NO CHINESE */}
-                  <div className="mt-4 flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded border border-slate-200">
-                      Hint: {quizData[currentQIndex].pos}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Options Grid */}
-                <div className="grid grid-cols-1 gap-3">
-                  {quizData[currentQIndex].options.map((opt: string, idx: number) => {
-                    const isSelected = userAnswers[currentQIndex] === opt;
-                    const isCorrect = opt === quizData[currentQIndex].word;
-                    
-                    let btnStyle = "border-slate-200 hover:bg-slate-50 text-slate-600";
-                    
-                    if (userAnswers[currentQIndex]) {
-                        if (isSelected && isCorrect) {
-                            btnStyle = "border-teal-500 bg-teal-50 text-teal-800 font-bold ring-1 ring-teal-500";
-                        } else if (isSelected && !isCorrect) {
-                            btnStyle = "border-red-500 bg-red-50 text-red-800 ring-1 ring-red-500";
-                        } else if (!isSelected && isCorrect) {
-                            btnStyle = "border-teal-500 bg-teal-50 text-teal-800 ring-1 ring-teal-500 opacity-70";
-                        } else {
-                            btnStyle = "border-slate-100 text-slate-300 opacity-50";
-                        }
-                    }
-
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => handleAnswer(opt)}
-                        disabled={!!userAnswers[currentQIndex]}
-                        className={`p-4 rounded-lg border-2 text-left transition-all duration-200 flex items-center justify-between group ${btnStyle}`}
-                      >
-                        <span className="text-lg">{opt}</span>
-                        {userAnswers[currentQIndex] && isCorrect && <CheckCircle className="w-5 h-5 text-teal-600" />}
-                        {userAnswers[currentQIndex] && isSelected && !isCorrect && <XCircle className="w-5 h-5 text-red-500" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-            <div className="text-center mt-6 text-slate-400 text-sm italic">
-                Select an option to automatically proceed.
-            </div>
-          </div>
-        )}
-
-        {/* RESULT SCREEN */}
-        {step === 'result' && (
-          <div className="bg-white max-w-4xl mx-auto print:w-full">
             
-            {/* Screen Header */}
+            <div className="mt-8 pt-6 border-t border-slate-100 text-center"><p className="text-xs text-slate-500 italic">Kindly note that the quiz questions are thoughtfully crafted by AI.<br/>敬請留意：本測驗題目由人工智慧生成。</p></div>
+          </div>
+        )}
+
+        {/* LOADING STATE */}
+        {step === 'generating' && (
+          <div className="text-center py-20">
+            <div className="w-16 h-16 border-4 border-t-teal-600 rounded-full animate-spin mx-auto mb-6"></div>
+            <h3 className="text-xl font-serif font-bold">Generating {mode === 'paper' ? 'Paper Quiz' : 'Questions'}...</h3>
+            <p className="text-slate-500 mt-2">Consulting the AI Engine</p>
+          </div>
+        )}
+
+        {/* ONLINE QUIZ MODE */}
+        {step === 'quiz' && mode === 'online' && quizData.length > 0 && (
+          <div className="max-w-3xl mx-auto">
+            <div className="mb-6 flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest"><span>Question {currentQIndex + 1}/{quizData.length}</span><span>Level {quizData[currentQIndex].level}</span></div>
+            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8 md:p-12">
+              <h3 className="text-xl font-serif leading-relaxed mb-10">{quizData[currentQIndex].sentence.split('______').map((part:string, i:number) => <span key={i}>{part}{i===0 && <span className="inline-block w-32 border-b-2 border-slate-800 mx-2 relative top-1"></span>}</span>)}</h3>
+              <div className="mt-4 mb-10 text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded inline-block">Hint: {quizData[currentQIndex].pos}</div>
+              <div className="grid gap-3">{quizData[currentQIndex].options.map((opt:string, idx:number) => {
+                let style = "border-slate-200 hover:bg-slate-50 text-slate-600";
+                if(userAnswers[currentQIndex]) {
+                  if(userAnswers[currentQIndex] === opt && opt === quizData[currentQIndex].word) style = "border-teal-500 bg-teal-50 text-teal-800 ring-1 ring-teal-500";
+                  else if(userAnswers[currentQIndex] === opt) style = "border-red-500 bg-red-50 text-red-800 ring-1 ring-red-500";
+                  else if(opt === quizData[currentQIndex].word) style = "border-teal-500 bg-teal-50 text-teal-800 opacity-70";
+                  else style = "opacity-50";
+                }
+                return <button key={idx} onClick={() => handleAnswer(opt)} disabled={!!userAnswers[currentQIndex]} className={`p-4 rounded-lg border-2 text-left flex justify-between items-center ${style}`}><span className="text-lg">{opt}</span></button>
+              })}</div>
+            </div>
+          </div>
+        )}
+
+        {/* ONLINE RESULT MODE */}
+        {step === 'result' && mode === 'online' && (
+          <div className="bg-white max-w-4xl mx-auto">
             <div className="bg-slate-900 text-white p-12 text-center rounded-xl shadow-xl mb-8 print:hidden">
               <Award className="w-16 h-16 text-teal-400 mx-auto mb-4" />
-              <h2 className="text-3xl font-serif font-bold mb-2">Assessment Complete</h2>
-              <div className="text-6xl font-black my-6 text-teal-400">
-                {calculateScore()} <span className="text-2xl text-slate-500 font-normal">/ {quizData.length}</span>
-              </div>
-              <p className="text-slate-400">Please fill in your details below to print the official report.</p>
+              <h2 className="text-3xl font-serif font-bold">Assessment Complete</h2>
+              <div className="text-6xl font-black my-6 text-teal-400">{calculateScore()} <span className="text-2xl text-slate-500 font-normal">/ {quizData.length}</span></div>
             </div>
+            
+            <div className="space-y-6">
+              {quizData.map((q, idx) => {
+                const isCorrect = userAnswers[idx] === q.word;
+                return (
+                  <div key={idx} className={`p-6 rounded-lg border shadow-sm ${isCorrect ? 'bg-white border-teal-100' : 'bg-red-50/10 border-red-100'}`}>
+                    {/* Question Header */}
+                    <div className="flex gap-4 mb-4">
+                       <span className={`font-mono text-sm pt-1 ${isCorrect ? 'text-teal-600' : 'text-red-500'}`}>{String(idx+1).padStart(2,'0')}.</span>
+                       <div className="flex-1">
+                         <p className="text-slate-800 leading-relaxed font-serif text-lg">
+                           {q.sentence.split('______').map((p:string,i:number)=><span key={i}>{p}{i===0 && <span className={`font-bold px-2 mx-1 border-b-2 ${isCorrect ? 'border-teal-500 text-teal-800' : 'border-red-500 text-red-700'}`}>{userAnswers[idx] || '(No Ans)'}</span>}</span>)}
+                         </p>
+                         {!isCorrect && <div className="text-sm text-red-600 font-bold mt-2">Correct Answer: {q.word}</div>}
+                       </div>
+                    </div>
 
-            {/* Print Header */}
-            <div className="hidden print:block mb-8 pb-4 border-b-2 border-black">
-              <div className="flex justify-between items-end">
-                <div>
-                  <h1 className="text-2xl font-serif font-bold text-black">Shirley's iVocab Quiz (GSAT)</h1>
-                  <p className="text-sm mt-1 text-gray-600">Performance Report</p>
-                </div>
-                <div className="text-right text-sm">
-                  <p>Date: {new Date().toLocaleDateString()}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="print:p-0">
-              
-              {/* User Info Inputs */}
-              <div className="grid grid-cols-3 gap-8 mb-10 bg-slate-50 p-8 rounded-lg border border-slate-200 print:bg-white print:border-none print:p-0 print:mb-6 print:gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Class</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-transparent border-b border-slate-300 py-1 focus:outline-none focus:border-teal-600 font-serif text-lg print:border-black"
-                    value={userInfo.classNo}
-                    onChange={e => setUserInfo({...userInfo, classNo: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Seat No.</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-transparent border-b border-slate-300 py-1 focus:outline-none focus:border-teal-600 font-serif text-lg print:border-black"
-                    value={userInfo.seatNo}
-                    onChange={e => setUserInfo({...userInfo, seatNo: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Name</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-transparent border-b border-slate-300 py-1 focus:outline-none focus:border-teal-600 font-serif text-lg print:border-black"
-                    value={userInfo.name}
-                    onChange={e => setUserInfo({...userInfo, name: e.target.value})}
-                  />
-                </div>
-              </div>
-
-              {/* Score Summary Row for Print */}
-              <div className="hidden print:flex justify-between items-center mb-6 border-b border-gray-900 pb-2 font-bold font-serif text-lg">
-                 <span>Level: {selectedLevel} (Units: {selectedUnits.join(', ')})</span>
-                 <span>Score: {calculateScore()} / {quizData.length}</span>
-              </div>
-
-              {/* Review List */}
-              <div className="space-y-4">
-                <h3 className="font-bold text-slate-700 uppercase tracking-wide text-sm mb-4 print:hidden">Detailed Review</h3>
-                {quizData.map((q, idx) => {
-                  const isCorrect = userAnswers[idx] === q.word;
-                  return (
-                    <div key={idx} className={`p-5 rounded-lg border flex gap-5 break-inside-avoid ${
-                      isCorrect 
-                        ? 'bg-teal-50/50 border-teal-100 print:bg-white print:border-gray-200' 
-                        : 'bg-red-50/50 border-red-100 print:bg-white print:border-gray-200'
-                    }`}>
-                      <div className="font-mono text-slate-400 pt-1 text-sm">{String(idx + 1).padStart(2, '0')}.</div>
-                      <div className="flex-1">
-                        {/* Sentence */}
-                        <p className="text-slate-800 mb-2 leading-relaxed font-serif text-lg">
-                          {q.sentence.split('______').map((part: string, i: number) => (
-                            <span key={i}>
-                              {part}
-                              {i === 0 && (
-                                <span className={`font-bold px-2 mx-1 border-b-2 ${
-                                    isCorrect 
-                                    ? 'border-teal-500 text-teal-800' 
-                                    : 'border-red-500 text-red-700'
-                                }`}>
-                                  {userAnswers[idx] || '(No Answer)'}
-                                </span>
-                              )}
-                            </span>
-                          ))}
-                        </p>
-                        
-                        {/* Correction if wrong */}
-                        {!isCorrect && (
-                          <div className="text-sm text-red-600 flex items-center gap-1 mt-2 font-medium">
-                            <XCircle className="w-4 h-4" />
-                            Correct Answer: <span className="font-bold underline">{q.word}</span>
-                          </div>
-                        )}
-
-                        {/* Metadata Footer: Source + POS + Meaning */}
-                        <div className="mt-3 pt-2 border-t border-slate-100 text-xs text-slate-500 flex flex-wrap items-center gap-3">
-                          {/* Part of Speech */}
-                          <span className="font-bold bg-slate-200 px-2 py-0.5 rounded text-slate-600">
-                            {q.pos}
-                          </span>
-                          
-                          {/* NEW: Source Tag (Level-Unit-No) */}
-                          <span className="font-mono font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-100">
-                            {`L${q.level}-U${q.unit}-${q.no}`}
-                          </span>
-
-                          {/* Meaning */}
-                          <span className="text-slate-600">{q.meaning}</span>
-                        </div>
+                    {/* Detailed Options Review Table */}
+                    <div className="ml-8 mt-4 bg-slate-50 rounded-md p-4 border border-slate-100">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Vocabulary Review</h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                          <thead>
+                            <tr className="border-b border-slate-200 text-slate-500">
+                              <th className="pb-2 font-medium w-32">Word</th>
+                              <th className="pb-2 font-medium w-16">POS</th>
+                              <th className="pb-2 font-medium">Meaning</th>
+                              <th className="pb-2 font-medium w-24">Source</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200/50">
+                            {q.options.map((opt: string, optIdx: number) => {
+                              const info = getWordInfo(opt);
+                              const isTarget = opt === q.word;
+                              return (
+                                <tr key={optIdx} className={isTarget ? "bg-teal-50/50" : ""}>
+                                  <td className={`py-2 pr-2 font-medium ${isTarget ? "text-teal-700" : "text-slate-700"}`}>
+                                    {opt} {isTarget && <CheckCircle className="w-3 h-3 inline ml-1 text-teal-500"/>}
+                                  </td>
+                                  <td className="py-2 pr-2 text-slate-500 italic">{info?.pos || '-'}</td>
+                                  <td className="py-2 pr-2 text-slate-600">{info?.meaning || '-'}</td>
+                                  <td className="py-2 text-slate-400 font-mono text-xs">{info ? `L${info.level}-U${info.unit}` : '-'}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
+                  </div>
+                );
+              })}
+            </div>
 
-              {/* Actions */}
-              <div className="mt-12 flex justify-center gap-4 print:hidden pb-12">
-                <button
-                  onClick={() => window.location.reload()}
-                  className="px-8 py-3 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 font-medium flex items-center gap-2 transition-colors"
-                >
-                  <RotateCcw className="w-4 h-4" /> New Quiz
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="px-8 py-3 rounded-lg bg-teal-600 text-white shadow-lg hover:bg-teal-700 font-medium flex items-center gap-2 transition-colors hover:shadow-xl"
-                >
-                  <Printer className="w-4 h-4" /> Print Report
-                </button>
-              </div>
+            <div className="mt-12 flex justify-center gap-4 print:hidden pb-12">
+              <button onClick={() => window.location.reload()} className="px-8 py-3 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 flex gap-2"><RotateCcw className="w-4 h-4" /> New Quiz</button>
             </div>
           </div>
         )}
+
+        {/* PAPER RESULT (PRINT MODE) */}
+        {step === 'result' && mode === 'paper' && (
+           <div className="max-w-none w-full bg-white text-black font-serif leading-snug">
+              
+              {/* Controls (Not printed) */}
+              <div className="print:hidden mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
+                <div className="flex items-center gap-2 text-yellow-800">
+                   <Edit3 className="w-5 h-5" /> 
+                   <span className="text-sm font-bold">Editable Mode Active: Click text below to edit typos before printing.</span>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => window.location.reload()} className="px-4 py-2 rounded bg-white border border-slate-300 text-sm font-bold hover:bg-slate-50">Back</button>
+                  <button onClick={() => window.print()} className="px-4 py-2 rounded bg-slate-900 text-white text-sm font-bold hover:bg-slate-700 flex items-center gap-2"><Printer className="w-4 h-4"/> Print A4</button>
+                </div>
+              </div>
+
+              {/* Editable Wrapper */}
+              <div ref={paperRef} contentEditable suppressContentEditableWarning className="outline-none">
+                
+                {/* --- QUESTION SHEET --- */}
+                <div className="print-section">
+                  {/* Header */}
+                  <div className="border-b-2 border-black pb-4 mb-6">
+                    <h1 className="text-2xl font-bold text-center mb-2">iVocab Level {selectedLevel} Unit(s) {selectedUnits.join(', ')} Gap Filling Quiz</h1>
+                    <div className="flex justify-between items-end mt-6 text-lg font-medium font-sans">
+                      <div className="flex gap-6 w-3/4">
+                        <span>Class: ________</span>
+                        <span>Seat No.: ________</span>
+                        <span>Name: ________________</span>
+                        <span>Date: ___________</span>
+                      </div>
+                      <div className="w-1/4 text-right">
+                        Score: _________ <span className="text-xs align-top">(3*{quizData.length}+10)</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Questions List */}
+                  <div className="space-y-3">
+                    {quizData.map((q, idx) => (
+                      <div key={idx} className="break-inside-avoid">
+                        <div className="flex gap-2">
+                          <span className="font-bold">{idx + 1}.</span>
+                          <div>
+                            {/* Sentence with blank */}
+                            <p className="mb-1 text-justify">
+                               {q.sentence.replace('______', '__________')}
+                            </p>
+                            {/* Options in one line */}
+                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                              {q.options.map((opt: string, oIdx: number) => (
+                                <span key={oIdx} className="font-medium">
+                                  ({getOptionLabel(oIdx)}) {opt}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* --- PAGE BREAK --- */}
+                <div className="break-before-page mt-10 pt-10 border-t-2 border-dashed border-slate-300 print:border-none"></div>
+
+                {/* --- ANSWER KEY SHEET --- */}
+                <div className="print-section">
+                  <div className="border-b-2 border-black pb-4 mb-6">
+                     <h1 className="text-xl font-bold text-center">Answer Key & Analysis</h1>
+                     <p className="text-center text-sm text-slate-600">Level {selectedLevel} Unit(s) {selectedUnits.join(', ')}</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 text-sm">
+                    {quizData.map((q, idx) => {
+                      const correctIndex = q.options.indexOf(q.word);
+                      return (
+                        <div key={idx} className="flex gap-3 break-inside-avoid border-b border-slate-100 pb-2">
+                           <div className="font-bold w-8 text-lg">{idx+1}.</div>
+                           <div className="w-8 font-bold text-lg text-slate-900">({getOptionLabel(correctIndex)})</div>
+                           <div className="flex-1">
+                              <div className="font-bold text-slate-800 underline mb-1">{q.word}</div>
+                              <div className="flex gap-2 text-xs text-slate-500 font-mono">
+                                 <span className="bg-slate-100 px-1 rounded">{q.pos}</span>
+                                 <span>{q.meaning}</span>
+                                 <span>(L{q.level}-U{q.unit})</span>
+                              </div>
+                              <div className="text-slate-400 italic mt-1 text-xs">{q.sentence}</div>
+                           </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+           </div>
+        )}
+
       </main>
+
+      {/* Global Print Styles */}
+      <style jsx global>{`
+        @media print {
+          @page { margin: 1.5cm; size: A4; }
+          body { background: white; color: black; }
+          .break-before-page { page-break-before: always; }
+          .break-inside-avoid { page-break-inside: avoid; }
+          /* Hide scrollbars and extra UI */
+          ::-webkit-scrollbar { display: none; }
+        }
+      `}</style>
     </div>
   );
 }
