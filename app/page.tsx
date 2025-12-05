@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, XCircle, Printer, RotateCcw, Award, Sparkles, BookOpen, FileText, MonitorPlay, Edit3 } from 'lucide-react';
+import { CheckCircle, Printer, RotateCcw, Award, Sparkles, BookOpen, FileText, MonitorPlay, Edit3, ArrowLeft } from 'lucide-react';
 import { fetchAndParseCSV, VocabWord } from '@/lib/csv';
 
 // Helper: Shuffle Array
@@ -128,8 +128,6 @@ export default function Home() {
   };
 
   const calculateScore = () => quizData.reduce((acc, q, idx) => acc + (userAnswers[idx] === q.word ? 1 : 0), 0);
-
-  // Helper to find word info for review
   const getWordInfo = (word: string) => fullData.find(w => w.word === word);
 
   return (
@@ -235,7 +233,6 @@ export default function Home() {
                 const isCorrect = userAnswers[idx] === q.word;
                 return (
                   <div key={idx} className={`p-6 rounded-lg border shadow-sm ${isCorrect ? 'bg-white border-teal-100' : 'bg-red-50/10 border-red-100'}`}>
-                    {/* Question Header */}
                     <div className="flex gap-4 mb-4">
                        <span className={`font-mono text-sm pt-1 ${isCorrect ? 'text-teal-600' : 'text-red-500'}`}>{String(idx+1).padStart(2,'0')}.</span>
                        <div className="flex-1">
@@ -245,8 +242,7 @@ export default function Home() {
                          {!isCorrect && <div className="text-sm text-red-600 font-bold mt-2">Correct Answer: {q.word}</div>}
                        </div>
                     </div>
-
-                    {/* Detailed Options Review Table */}
+                    {/* Detailed Review Table */}
                     <div className="ml-8 mt-4 bg-slate-50 rounded-md p-4 border border-slate-100">
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Vocabulary Review</h4>
                       <div className="overflow-x-auto">
@@ -282,7 +278,6 @@ export default function Home() {
                 );
               })}
             </div>
-
             <div className="mt-12 flex justify-center gap-4 print:hidden pb-12">
               <button onClick={() => window.location.reload()} className="px-8 py-3 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 flex gap-2"><RotateCcw className="w-4 h-4" /> New Quiz</button>
             </div>
@@ -291,56 +286,53 @@ export default function Home() {
 
         {/* PAPER RESULT (PRINT MODE) */}
         {step === 'result' && mode === 'paper' && (
-           <div className="max-w-none w-full bg-white text-black font-serif leading-snug">
-              
-              {/* Controls (Not printed) */}
+           <div className="max-w-none w-full bg-white text-black">
+              {/* Controls */}
               <div className="print:hidden mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
                 <div className="flex items-center gap-2 text-yellow-800">
                    <Edit3 className="w-5 h-5" /> 
-                   <span className="text-sm font-bold">Editable Mode Active: Click text below to edit typos before printing.</span>
+                   <span className="text-sm font-bold">Editable Mode Active: Click text below to edit before printing.</span>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => window.location.reload()} className="px-4 py-2 rounded bg-white border border-slate-300 text-sm font-bold hover:bg-slate-50">Back</button>
+                  <button onClick={() => setStep('setup')} className="px-4 py-2 rounded bg-white border border-slate-300 text-sm font-bold hover:bg-slate-50 flex items-center gap-2"><ArrowLeft className="w-4 h-4"/> Back</button>
                   <button onClick={() => window.print()} className="px-4 py-2 rounded bg-slate-900 text-white text-sm font-bold hover:bg-slate-700 flex items-center gap-2"><Printer className="w-4 h-4"/> Print A4</button>
                 </div>
               </div>
 
-              {/* Editable Wrapper */}
-              <div ref={paperRef} contentEditable suppressContentEditableWarning className="outline-none">
+              {/* Editable Content */}
+              <div ref={paperRef} contentEditable suppressContentEditableWarning className="outline-none" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
                 
                 {/* --- QUESTION SHEET --- */}
                 <div className="print-section">
                   {/* Header */}
-                  <div className="border-b-2 border-black pb-4 mb-6">
-                    <h1 className="text-2xl font-bold text-center mb-2">iVocab Level {selectedLevel} Unit(s) {selectedUnits.join(', ')} Gap Filling Quiz</h1>
-                    <div className="flex justify-between items-end mt-6 text-lg font-medium font-sans">
-                      <div className="flex gap-6 w-3/4">
-                        <span>Class: ________</span>
-                        <span>Seat No.: ________</span>
-                        <span>Name: ________________</span>
-                        <span>Date: ___________</span>
-                      </div>
-                      <div className="w-1/4 text-right">
-                        Score: _________ <span className="text-xs align-top">(3*{quizData.length}+10)</span>
-                      </div>
+                  <div className="border-b-2 border-black pb-2 mb-6">
+                    <h1 className="text-2xl font-bold text-center mb-4">iVocab Level {selectedLevel} Unit(s) {selectedUnits.join(', ')} Gap Filling Quiz</h1>
+                    
+                    {/* One Line Info Header */}
+                    <div className="flex justify-between items-end w-full text-[12pt] font-medium leading-none mb-2">
+                        <div>Class: _______</div>
+                        <div>Seat No.: _______</div>
+                        <div>Name: _________________</div>
+                        <div>Date: __________</div>
+                        <div>Score: ________ <span className="text-[10pt] align-top">(3*{quizData.length}+10)</span></div>
                     </div>
                   </div>
 
-                  {/* Questions List */}
-                  <div className="space-y-3">
+                  {/* Questions List - 12pt Times New Roman */}
+                  <div className="space-y-4 text-[12pt] leading-tight">
                     {quizData.map((q, idx) => (
                       <div key={idx} className="break-inside-avoid">
                         <div className="flex gap-2">
                           <span className="font-bold">{idx + 1}.</span>
-                          <div>
-                            {/* Sentence with blank */}
+                          <div className="w-full">
+                            {/* Sentence */}
                             <p className="mb-1 text-justify">
                                {q.sentence.replace('______', '__________')}
                             </p>
-                            {/* Options in one line */}
-                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                            {/* Options on same line */}
+                            <div className="flex flex-wrap gap-x-8 gap-y-1">
                               {q.options.map((opt: string, oIdx: number) => (
-                                <span key={oIdx} className="font-medium">
+                                <span key={oIdx}>
                                   ({getOptionLabel(oIdx)}) {opt}
                                 </span>
                               ))}
@@ -359,24 +351,24 @@ export default function Home() {
                 <div className="print-section">
                   <div className="border-b-2 border-black pb-4 mb-6">
                      <h1 className="text-xl font-bold text-center">Answer Key & Analysis</h1>
-                     <p className="text-center text-sm text-slate-600">Level {selectedLevel} Unit(s) {selectedUnits.join(', ')}</p>
+                     <p className="text-center text-sm">Level {selectedLevel} Unit(s) {selectedUnits.join(', ')}</p>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 text-sm">
+                  <div className="grid grid-cols-1 gap-4 text-[11pt]">
                     {quizData.map((q, idx) => {
                       const correctIndex = q.options.indexOf(q.word);
                       return (
                         <div key={idx} className="flex gap-3 break-inside-avoid border-b border-slate-100 pb-2">
-                           <div className="font-bold w-8 text-lg">{idx+1}.</div>
-                           <div className="w-8 font-bold text-lg text-slate-900">({getOptionLabel(correctIndex)})</div>
+                           <div className="font-bold w-8">{idx+1}.</div>
+                           <div className="w-8 font-bold">({getOptionLabel(correctIndex)})</div>
                            <div className="flex-1">
-                              <div className="font-bold text-slate-800 underline mb-1">{q.word}</div>
-                              <div className="flex gap-2 text-xs text-slate-500 font-mono">
-                                 <span className="bg-slate-100 px-1 rounded">{q.pos}</span>
+                              <div className="font-bold underline mb-1">{q.word}</div>
+                              <div className="flex gap-3 text-[10pt] text-slate-600">
+                                 <span className="italic">{q.pos}</span>
                                  <span>{q.meaning}</span>
                                  <span>(L{q.level}-U{q.unit})</span>
                               </div>
-                              <div className="text-slate-400 italic mt-1 text-xs">{q.sentence}</div>
+                              <div className="text-slate-400 italic mt-1 text-[10pt]">{q.sentence}</div>
                            </div>
                         </div>
                       )
@@ -396,7 +388,8 @@ export default function Home() {
           body { background: white; color: black; }
           .break-before-page { page-break-before: always; }
           .break-inside-avoid { page-break-inside: avoid; }
-          /* Hide scrollbars and extra UI */
+          /* Enforce Times New Roman in print specifically */
+          .print-section { font-family: "Times New Roman", Times, serif; }
           ::-webkit-scrollbar { display: none; }
         }
       `}</style>
