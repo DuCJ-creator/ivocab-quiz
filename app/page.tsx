@@ -185,7 +185,12 @@ export default function Home() {
               </button>
             </div>
             
-            <div className="mt-8 pt-6 border-t border-slate-100 text-center"><p className="text-xs text-slate-500 italic">Kindly note that the quiz questions are thoughtfully crafted by AI.<br/>敬請留意：本測驗題目由人工智慧生成。</p></div>
+            <div className="mt-8 pt-6 border-t border-slate-100 text-center px-4">
+              <p className="text-xs text-slate-500 italic leading-relaxed">
+                Kindly note that the reading materials are thoughtfully crafted by AI—and while every effort is made for accuracy, occasional slips may still occur.<br/>
+                敬請留意：本閱讀材料由人工智慧精心生成，雖力求準確，偶有疏漏仍在所難免。
+              </p>
+            </div>
           </div>
         )}
 
@@ -291,7 +296,7 @@ export default function Home() {
               <div className="print:hidden mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
                 <div className="flex items-center gap-2 text-yellow-800">
                    <Edit3 className="w-5 h-5" /> 
-                   <span className="text-sm font-bold">Editable Mode Active: Click text below to edit before printing.</span>
+                   <span className="text-sm font-bold">Editable Mode: Click text to edit.</span>
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setStep('setup')} className="px-4 py-2 rounded bg-white border border-slate-300 text-sm font-bold hover:bg-slate-50 flex items-center gap-2"><ArrowLeft className="w-4 h-4"/> Back</button>
@@ -308,13 +313,13 @@ export default function Home() {
                   <div className="border-b-2 border-black pb-2 mb-6">
                     <h1 className="text-2xl font-bold text-center mb-4">iVocab Level {selectedLevel} Unit(s) {selectedUnits.join(', ')} Gap Filling Quiz</h1>
                     
-                    {/* One Line Info Header */}
-                    <div className="flex justify-between items-end w-full text-[12pt] font-medium leading-none mb-2">
-                        <div>Class: _______</div>
-                        <div>Seat No.: _______</div>
-                        <div>Name: _________________</div>
-                        <div>Date: __________</div>
-                        <div>Score: ________ <span className="text-[10pt] align-top">(3*{quizData.length}+10)</span></div>
+                    {/* One Line Info Header - Optimized with whitespace-nowrap */}
+                    <div className="flex justify-between items-end w-full text-[12pt] font-medium leading-none mb-2 whitespace-nowrap">
+                        <div className="w-[18%]">Class: <span className="inline-block border-b border-black w-12"></span></div>
+                        <div className="w-[18%]">Seat No.: <span className="inline-block border-b border-black w-10"></span></div>
+                        <div className="w-[30%]">Name: <span className="inline-block border-b border-black w-32"></span></div>
+                        <div className="w-[18%]">Date: <span className="inline-block border-b border-black w-16"></span></div>
+                        <div className="w-auto text-right">Score: <span className="inline-block border-b border-black w-12"></span> <span className="text-[10pt] align-top">(3*{quizData.length}+10)</span></div>
                     </div>
                   </div>
 
@@ -347,28 +352,28 @@ export default function Home() {
                 {/* --- PAGE BREAK --- */}
                 <div className="break-before-page mt-10 pt-10 border-t-2 border-dashed border-slate-300 print:border-none"></div>
 
-                {/* --- ANSWER KEY SHEET --- */}
+                {/* --- ANSWER KEY SHEET (2 Columns) --- */}
                 <div className="print-section">
                   <div className="border-b-2 border-black pb-4 mb-6">
                      <h1 className="text-xl font-bold text-center">Answer Key & Analysis</h1>
                      <p className="text-center text-sm">Level {selectedLevel} Unit(s) {selectedUnits.join(', ')}</p>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 text-[11pt]">
+                  {/* 2 Column Grid for Answer Key */}
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-[10pt]">
                     {quizData.map((q, idx) => {
                       const correctIndex = q.options.indexOf(q.word);
                       return (
-                        <div key={idx} className="flex gap-3 break-inside-avoid border-b border-slate-100 pb-2">
-                           <div className="font-bold w-8">{idx+1}.</div>
-                           <div className="w-8 font-bold">({getOptionLabel(correctIndex)})</div>
-                           <div className="flex-1">
-                              <div className="font-bold underline mb-1">{q.word}</div>
-                              <div className="flex gap-3 text-[10pt] text-slate-600">
-                                 <span className="italic">{q.pos}</span>
+                        <div key={idx} className="flex gap-2 break-inside-avoid border-b border-slate-100 pb-2">
+                           <div className="font-bold w-6 text-base">{idx+1}.</div>
+                           <div className="w-6 font-bold text-base">({getOptionLabel(correctIndex)})</div>
+                           <div className="flex-1 min-w-0">
+                              <div className="font-bold underline mb-0.5">{q.word}</div>
+                              <div className="flex flex-wrap gap-2 text-slate-600 text-[9pt]">
+                                 <span className="italic font-serif">{q.pos}</span>
                                  <span>{q.meaning}</span>
-                                 <span>(L{q.level}-U{q.unit})</span>
+                                 <span className="text-slate-400 font-sans tracking-tight">L{q.level}-U{q.unit}</span>
                               </div>
-                              <div className="text-slate-400 italic mt-1 text-[10pt]">{q.sentence}</div>
                            </div>
                         </div>
                       )
@@ -384,7 +389,7 @@ export default function Home() {
       {/* Global Print Styles */}
       <style jsx global>{`
         @media print {
-          @page { margin: 1.5cm; size: A4; }
+          @page { margin: 1.27cm; size: A4; }
           body { background: white; color: black; }
           .break-before-page { page-break-before: always; }
           .break-inside-avoid { page-break-inside: avoid; }
