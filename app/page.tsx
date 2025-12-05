@@ -352,19 +352,19 @@ export default function Home() {
                 {/* --- PAGE BREAK --- */}
                 <div className="break-before-page mt-10 pt-10 border-t-2 border-dashed border-slate-300 print:border-none"></div>
 
-                {/* --- ANSWER KEY SHEET (2 Columns) --- */}
+                {/* --- ANSWER KEY SHEET (2 Columns, Tightened) --- */}
                 <div className="print-section">
-                  <div className="border-b-2 border-black pb-4 mb-6">
+                  <div className="border-b-2 border-black pb-2 mb-2">
                      <h1 className="text-xl font-bold text-center">Answer Key & Analysis</h1>
                      <p className="text-center text-sm">Level {selectedLevel} Unit(s) {selectedUnits.join(', ')}</p>
                   </div>
 
-                  {/* 2 Column Grid for Answer Key */}
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-[10pt]">
+                  {/* 2 Column Grid for Answer Key - Tight Spacing */}
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[10pt]">
                     {quizData.map((q, idx) => {
                       const correctIndex = q.options.indexOf(q.word);
                       return (
-                        <div key={idx} className="flex gap-2 break-inside-avoid border-b border-slate-100 pb-2">
+                        <div key={idx} className="flex gap-2 break-inside-avoid border-b border-slate-100 pb-1">
                            <div className="font-bold w-6 text-base">{idx+1}.</div>
                            <div className="w-6 font-bold text-base">({getOptionLabel(correctIndex)})</div>
                            <div className="flex-1 min-w-0">
@@ -389,7 +389,7 @@ export default function Home() {
       {/* Global Print Styles */}
       <style jsx global>{`
         @media print {
-          @page { margin: 1.27cm; size: A4; }
+          @page { margin: 1cm; size: A4; }
           body { background: white; color: black; }
           .break-before-page { page-break-before: always; }
           .break-inside-avoid { page-break-inside: avoid; }
