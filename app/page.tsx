@@ -35,6 +35,9 @@ export default function Home() {
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   
+  // User Info for Online Result Print
+  const [userInfo, setUserInfo] = useState({ classNo: '', seatNo: '', name: '' });
+  
   // Paper specific state
   const paperRef = useRef<HTMLDivElement>(null);
 
@@ -109,6 +112,8 @@ export default function Home() {
       setQuizData(finalQuiz);
       setCurrentQIndex(0);
       setUserAnswers({});
+      // Clear user info on new quiz
+      setUserInfo({ classNo: '', seatNo: '', name: '' }); 
       setStep(targetMode === 'online' ? 'quiz' : 'result'); // Paper goes straight to result view
 
     } catch (error) {
@@ -227,17 +232,56 @@ export default function Home() {
         {/* ONLINE RESULT MODE */}
         {step === 'result' && mode === 'online' && (
           <div className="bg-white max-w-4xl mx-auto">
+            
+            {/* Online Header (Hidden when printing, replaced by text) */}
             <div className="bg-slate-900 text-white p-12 text-center rounded-xl shadow-xl mb-8 print:hidden">
               <Award className="w-16 h-16 text-teal-400 mx-auto mb-4" />
               <h2 className="text-3xl font-serif font-bold">Assessment Complete</h2>
               <div className="text-6xl font-black my-6 text-teal-400">{calculateScore()} <span className="text-2xl text-slate-500 font-normal">/ {quizData.length}</span></div>
+            </div>
+
+            {/* Print Header for Online Mode */}
+            <div className="hidden print:block border-b-2 border-black mb-6 pb-2">
+              <h1 className="text-2xl font-bold">Shirley's iVocab Quiz Result</h1>
+              <p className="text-lg mt-1">Score: <span className="font-bold text-2xl">{calculateScore()}</span> / {quizData.length}</p>
+            </div>
+
+            {/* User Input Section (Interactive) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 bg-slate-50 p-6 rounded-lg border border-slate-200 print:bg-white print:border-none print:p-0 print:mb-6">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2 print:text-black">Class</label>
+                    <input 
+                      value={userInfo.classNo}
+                      onChange={(e) => setUserInfo({...userInfo, classNo: e.target.value})}
+                      className="w-full bg-transparent border-b-2 border-slate-300 py-1 font-serif text-lg focus:outline-none focus:border-teal-500 print:border-black"
+                      placeholder="Input Class..."
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2 print:text-black">Seat No.</label>
+                    <input 
+                      value={userInfo.seatNo}
+                      onChange={(e) => setUserInfo({...userInfo, seatNo: e.target.value})}
+                      className="w-full bg-transparent border-b-2 border-slate-300 py-1 font-serif text-lg focus:outline-none focus:border-teal-500 print:border-black"
+                      placeholder="Input No..."
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2 print:text-black">Name</label>
+                    <input 
+                      value={userInfo.name}
+                      onChange={(e) => setUserInfo({...userInfo, name: e.target.value})}
+                      className="w-full bg-transparent border-b-2 border-slate-300 py-1 font-serif text-lg focus:outline-none focus:border-teal-500 print:border-black"
+                      placeholder="Input Name..."
+                    />
+                </div>
             </div>
             
             <div className="space-y-6">
               {quizData.map((q, idx) => {
                 const isCorrect = userAnswers[idx] === q.word;
                 return (
-                  <div key={idx} className={`p-6 rounded-lg border shadow-sm ${isCorrect ? 'bg-white border-teal-100' : 'bg-red-50/10 border-red-100'}`}>
+                  <div key={idx} className={`p-6 rounded-lg border shadow-sm break-inside-avoid ${isCorrect ? 'bg-white border-teal-100' : 'bg-red-50/10 border-red-100'}`}>
                     <div className="flex gap-4 mb-4">
                        <span className={`font-mono text-sm pt-1 ${isCorrect ? 'text-teal-600' : 'text-red-500'}`}>{String(idx+1).padStart(2,'0')}.</span>
                        <div className="flex-1">
@@ -248,7 +292,7 @@ export default function Home() {
                        </div>
                     </div>
                     {/* Detailed Review Table */}
-                    <div className="ml-8 mt-4 bg-slate-50 rounded-md p-4 border border-slate-100">
+                    <div className="ml-8 mt-4 bg-slate-50 rounded-md p-4 border border-slate-100 print:bg-white print:border-slate-200">
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Vocabulary Review</h4>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
@@ -265,7 +309,7 @@ export default function Home() {
                               const info = getWordInfo(opt);
                               const isTarget = opt === q.word;
                               return (
-                                <tr key={optIdx} className={isTarget ? "bg-teal-50/50" : ""}>
+                                <tr key={optIdx} className={isTarget ? "bg-teal-50/50 print:bg-slate-100" : ""}>
                                   <td className={`py-2 pr-2 font-medium ${isTarget ? "text-teal-700" : "text-slate-700"}`}>
                                     {opt} {isTarget && <CheckCircle className="w-3 h-3 inline ml-1 text-teal-500"/>}
                                   </td>
@@ -283,8 +327,11 @@ export default function Home() {
                 );
               })}
             </div>
+
+            {/* Online Action Buttons (Hidden on Print) */}
             <div className="mt-12 flex justify-center gap-4 print:hidden pb-12">
               <button onClick={() => window.location.reload()} className="px-8 py-3 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 flex gap-2"><RotateCcw className="w-4 h-4" /> New Quiz</button>
+              <button onClick={() => window.print()} className="px-8 py-3 rounded-lg bg-teal-600 text-white shadow-lg hover:bg-teal-700 flex gap-2"><Printer className="w-4 h-4" /> Print Report</button>
             </div>
           </div>
         )}
@@ -393,7 +440,7 @@ export default function Home() {
           body { background: white; color: black; }
           .break-before-page { page-break-before: always; }
           .break-inside-avoid { page-break-inside: avoid; }
-          /* Enforce Times New Roman in print specifically */
+          /* Enforce Times New Roman in print specifically for paper mode */
           .print-section { font-family: "Times New Roman", Times, serif; }
           ::-webkit-scrollbar { display: none; }
         }
