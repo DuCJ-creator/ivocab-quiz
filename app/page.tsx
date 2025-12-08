@@ -52,6 +52,13 @@ export default function Home() {
   // Paper specific state
   const paperRef = useRef<HTMLDivElement>(null);
 
+  // ✅ Lunar badge status
+  const [lunarLinked, setLunarLinked] = useState(false);
+
+  useEffect(() => {
+    setLunarLinked(!!window.opener);
+  }, []);
+
   // Load Data
   useEffect(() => {
     const loadData = async () => {
@@ -183,7 +190,7 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 print:bg-white">
       {/* Navigation - Hidden when printing */}
       <nav className="bg-slate-900 text-white shadow-lg print:hidden">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-teal-500 rounded-lg">
               <BookOpen className="w-8 h-8 text-slate-900" />
@@ -197,29 +204,39 @@ export default function Home() {
               </p>
             </div>
           </div>
-          {step !== 'setup' && (
-            <button
-              onClick={() => window.location.reload()}
-              className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
-            >
-              <RotateCcw className="w-4 h-4" /> Reset
-            </button>
-          )}
+
+          <div className="flex items-center gap-4">
+            {/* ✅ Lunar badge */}
+            <div className={`text-xs font-bold px-3 py-2 rounded-full border 
+              ${lunarLinked ? "bg-emerald-500/15 border-emerald-300/30 text-emerald-200"
+                            : "bg-white/5 border-white/10 text-slate-300"}`}>
+              🌙 {lunarLinked ? "月光任務已連線" : "請從月光寶盒進入"}
+            </div>
+
+            {step !== 'setup' && (
+              <button
+                onClick={() => window.location.reload()}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" /> Reset
+              </button>
+            )}
+          </div>
         </div>
       </nav>
 
-      <main className="max-w-4xl mx-auto p-6 md:py-12 print:p-0 print:max-w-none print:w-full">
+      <main className="max-w-4xl mx-auto p-6 md:py-10 print:p-0 print:max-w-none print:w-full">
 
         {/* SETUP SCREEN */}
         {step === 'setup' && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 md:p-12">
-            <h2 className="text-2xl font-serif font-bold text-slate-800 flex items-center gap-2 mb-8">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 md:p-10">
+            <h2 className="text-2xl font-serif font-bold text-slate-800 flex items-center gap-2 mb-6">
               <Sparkles className="w-5 h-5 text-teal-600" /> Configure Assessment
             </h2>
 
             {/* Level Selection */}
-            <div className="mb-8">
-              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Level</label>
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-2">Level</label>
               <div className="flex flex-wrap gap-2">
                 {[1, 2, 3, 4, 5, 6].map(lvl => (
                   <button
@@ -236,12 +253,12 @@ export default function Home() {
             </div>
 
             {/* Unit Selection */}
-            <div className="mb-8">
-              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">Units</label>
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-2">Units</label>
               {isLoadingCSV ? (
                 <div className="animate-pulse text-slate-400">Loading Dictionary...</div>
               ) : (
-                <div className="bg-slate-50 p-6 rounded-lg border border-slate-200 max-h-56 overflow-y-auto">
+                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 max-h-56 overflow-y-auto">
                   <div className="flex flex-wrap gap-2">
                     {availableUnits.map(unit => (
                       <button
@@ -262,11 +279,11 @@ export default function Home() {
             </div>
 
             {/* Questions Count (Online Only) */}
-            <div className="mb-10">
-              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">
+            <div className="mb-8">
+              <label className="block text-sm font-bold text-slate-700 uppercase tracking-wide mb-2">
                 Questions (Online Mode Only)
               </label>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-4 gap-3">
                 {[5, 10, 20, 30].map(count => (
                   <button
                     key={count}
@@ -300,13 +317,6 @@ export default function Home() {
                 <FileText className="w-5 h-5" /> Generate Paper Quiz
               </button>
             </div>
-
-            <div className="mt-8 pt-6 border-t border-slate-100 text-center px-4">
-              <p className="text-xs text-slate-500 italic leading-relaxed">
-                Kindly note that the quiz questions are thoughtfully crafted by AI—and while every effort is made for accuracy, occasional slips may still occur.<br/>
-                敬請留意：本測驗題由人工智慧精心生成，雖力求準確，偶有疏漏仍在所難免。
-              </p>
-            </div>
           </div>
         )}
 
@@ -324,12 +334,12 @@ export default function Home() {
         {/* ONLINE QUIZ MODE */}
         {step === 'quiz' && mode === 'online' && quizData.length > 0 && (
           <div className="max-w-3xl mx-auto">
-            <div className="mb-6 flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
+            <div className="mb-5 flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest">
               <span>Question {currentQIndex + 1}/{quizData.length}</span>
               <span>Level {quizData[currentQIndex].level}</span>
             </div>
-            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8 md:p-12">
-              <h3 className="text-xl font-serif leading-relaxed mb-10">
+            <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8 md:p-10">
+              <h3 className="text-xl font-serif leading-relaxed mb-8">
                 {quizData[currentQIndex].sentence.split('______').map((part: string, i: number) => (
                   <span key={i}>
                     {part}
@@ -339,7 +349,7 @@ export default function Home() {
                   </span>
                 ))}
               </h3>
-              <div className="mt-4 mb-10 text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded inline-block">
+              <div className="mt-2 mb-7 text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded inline-block">
                 Hint: {quizData[currentQIndex].pos}
               </div>
               <div className="grid gap-3">
@@ -374,28 +384,24 @@ export default function Home() {
         {/* ONLINE RESULT MODE */}
         {step === 'result' && mode === 'online' && (
           <div className="bg-white max-w-4xl mx-auto">
-
-            {/* Online Header */}
-            <div className="bg-slate-900 text-white p-12 text-center rounded-xl shadow-xl mb-8 print:hidden">
-              <Award className="w-16 h-16 text-teal-400 mx-auto mb-4" />
+            <div className="bg-slate-900 text-white p-10 text-center rounded-xl shadow-xl mb-7 print:hidden">
+              <Award className="w-14 h-14 text-teal-400 mx-auto mb-3" />
               <h2 className="text-3xl font-serif font-bold">Assessment Complete</h2>
-              <div className="text-6xl font-black my-6 text-teal-400">
+              <div className="text-6xl font-black my-5 text-teal-400">
                 {calculateScore()} <span className="text-2xl text-slate-500 font-normal">/ {quizData.length}</span>
               </div>
             </div>
 
-            {/* Print Header */}
-            <div className="hidden print:block border-b-2 border-black mb-6 pb-2">
+            <div className="hidden print:block border-b-2 border-black mb-4 pb-1">
               <h1 className="text-2xl font-bold">Shirley's iVocab Quiz Result</h1>
               <p className="text-lg mt-1">
                 Score: <span className="font-bold text-2xl">{calculateScore()}</span> / {quizData.length}
               </p>
             </div>
 
-            {/* User Input Section */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 bg-slate-50 p-6 rounded-lg border border-slate-200 print:bg-white print:border-none print:p-0 print:mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8 bg-slate-50 p-5 rounded-lg border border-slate-200 print:bg-white print:border-none print:p-0 print:mb-5">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2 print:text-black">Class</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 print:text-black">Class</label>
                 <input
                   value={userInfo.classNo}
                   onChange={(e) => setUserInfo({ ...userInfo, classNo: e.target.value })}
@@ -404,7 +410,7 @@ export default function Home() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2 print:text-black">Seat No.</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 print:text-black">Seat No.</label>
                 <input
                   value={userInfo.seatNo}
                   onChange={(e) => setUserInfo({ ...userInfo, seatNo: e.target.value })}
@@ -413,7 +419,7 @@ export default function Home() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2 print:text-black">Name</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1 print:text-black">Name</label>
                 <input
                   value={userInfo.name}
                   onChange={(e) => setUserInfo({ ...userInfo, name: e.target.value })}
@@ -423,12 +429,12 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-5">
               {quizData.map((q, idx) => {
                 const isCorrect = userAnswers[idx] === q.word;
                 return (
-                  <div key={idx} className={`p-6 rounded-lg border shadow-sm break-inside-avoid ${isCorrect ? 'bg-white border-teal-100' : 'bg-red-50/10 border-red-100'}`}>
-                    <div className="flex gap-4 mb-4">
+                  <div key={idx} className={`p-5 rounded-lg border shadow-sm break-inside-avoid ${isCorrect ? 'bg-white border-teal-100' : 'bg-red-50/10 border-red-100'}`}>
+                    <div className="flex gap-3 mb-3">
                       <span className={`font-mono text-sm pt-1 ${isCorrect ? 'text-teal-600' : 'text-red-500'}`}>
                         {String(idx + 1).padStart(2, '0')}.
                       </span>
@@ -446,26 +452,25 @@ export default function Home() {
                           ))}
                         </p>
                         {!isCorrect && (
-                          <div className="text-sm text-red-600 font-bold mt-2">
+                          <div className="text-sm text-red-600 font-bold mt-1">
                             Correct Answer: {q.word}
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Detailed Review Table */}
-                    <div className="ml-8 mt-4 bg-slate-50 rounded-md p-4 border border-slate-100 print:bg-white print:border-slate-200">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                    <div className="ml-7 mt-3 bg-slate-50 rounded-md p-3 border border-slate-100 print:bg-white print:border-slate-200">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                         Vocabulary Review
                       </h4>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
                           <thead>
                             <tr className="border-b border-slate-200 text-slate-500">
-                              <th className="pb-2 font-medium w-32">Word</th>
-                              <th className="pb-2 font-medium w-16">POS</th>
-                              <th className="pb-2 font-medium">Meaning</th>
-                              <th className="pb-2 font-medium w-24">Source</th>
+                              <th className="pb-1 font-medium w-32">Word</th>
+                              <th className="pb-1 font-medium w-16">POS</th>
+                              <th className="pb-1 font-medium">Meaning</th>
+                              <th className="pb-1 font-medium w-24">Source</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-200/50">
@@ -474,12 +479,12 @@ export default function Home() {
                               const isTarget = opt === q.word;
                               return (
                                 <tr key={optIdx} className={isTarget ? "bg-teal-50/50 print:bg-slate-100" : ""}>
-                                  <td className={`py-2 pr-2 font-medium ${isTarget ? "text-teal-700" : "text-slate-700"}`}>
+                                  <td className={`py-1 pr-2 font-medium ${isTarget ? "text-teal-700" : "text-slate-700"}`}>
                                     {opt} {isTarget && <CheckCircle className="w-3 h-3 inline ml-1 text-teal-500" />}
                                   </td>
-                                  <td className="py-2 pr-2 text-slate-500 italic">{info?.pos || '-'}</td>
-                                  <td className="py-2 pr-2 text-slate-600">{info?.meaning || '-'}</td>
-                                  <td className="py-2 text-slate-400 font-mono text-xs">
+                                  <td className="py-1 pr-2 text-slate-500 italic">{info?.pos || '-'}</td>
+                                  <td className="py-1 pr-2 text-slate-600">{info?.meaning || '-'}</td>
+                                  <td className="py-1 text-slate-400 font-mono text-xs">
                                     {info ? `L${info.level}-U${info.unit}` : '-'}
                                   </td>
                                 </tr>
@@ -495,8 +500,7 @@ export default function Home() {
               })}
             </div>
 
-            {/* Online Action Buttons */}
-            <div className="mt-12 flex justify-center gap-4 print:hidden pb-12">
+            <div className="mt-10 flex justify-center gap-4 print:hidden pb-10">
               <button
                 onClick={() => window.location.reload()}
                 className="px-8 py-3 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 flex gap-2"
@@ -516,8 +520,7 @@ export default function Home() {
         {/* PAPER RESULT MODE */}
         {step === 'result' && mode === 'paper' && (
           <div className="max-w-none w-full bg-white text-black">
-            {/* Controls */}
-            <div className="print:hidden mb-8 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
+            <div className="print:hidden mb-5 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
               <div className="flex items-center gap-2 text-yellow-800">
                 <Edit3 className="w-5 h-5" />
                 <span className="text-sm font-bold">Editable Mode: Click text to edit.</span>
@@ -538,7 +541,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Editable Content */}
             <div
               ref={paperRef}
               contentEditable
@@ -547,34 +549,34 @@ export default function Home() {
               style={{ fontFamily: '"Times New Roman", Times, serif' }}
             >
               {/* --- QUESTION SHEET --- */}
-              <div className="print-section">
-                <div className="border-b-2 border-black pb-2 mb-6">
-                  <h1 className="text-2xl font-bold text-center mb-4">
+              <div className="print-section paper-questions">
+                <div className="border-b-2 border-black pb-1 mb-3 paper-header">
+                  <h1 className="text-xl font-bold text-center mb-2">
                     iVocab Level {selectedLevel} Unit(s) {selectedUnits.join(', ')} Gap Filling Quiz
                   </h1>
 
-                  <div className="flex justify-between items-end w-full text-[12pt] font-medium leading-none mb-2 whitespace-nowrap">
-                    <div className="w-[18%]">Class: <span className="inline-block border-b border-black w-12"></span></div>
-                    <div className="w-[18%]">Seat No.: <span className="inline-block border-b border-black w-10"></span></div>
-                    <div className="w-[30%]">Name: <span className="inline-block border-b border-black w-32"></span></div>
-                    <div className="w-[18%]">Date: <span className="inline-block border-b border-black w-16"></span></div>
+                  <div className="flex justify-between items-end w-full text-[11pt] font-medium leading-none mb-1 whitespace-nowrap">
+                    <div className="w-[18%]">Class: <span className="inline-block border-b border-black w-10"></span></div>
+                    <div className="w-[18%]">Seat No.: <span className="inline-block border-b border-black w-9"></span></div>
+                    <div className="w-[30%]">Name: <span className="inline-block border-b border-black w-28"></span></div>
+                    <div className="w-[18%]">Date: <span className="inline-block border-b border-black w-14"></span></div>
                     <div className="w-auto text-right">
-                      Score: <span className="inline-block border-b border-black w-12"></span>
-                      <span className="text-[10pt] align-top">(3*{quizData.length}+10)</span>
+                      Score: <span className="inline-block border-b border-black w-10"></span>
+                      <span className="text-[9pt] align-top">(3*{quizData.length}+10)</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-4 text-[12pt] leading-tight">
+                <div className="space-y-2 text-[11pt] leading-tight">
                   {quizData.map((q, idx) => (
-                    <div key={idx} className="break-inside-avoid">
-                      <div className="flex gap-2">
+                    <div key={idx} className="break-inside-avoid question-item">
+                      <div className="flex gap-2 items-start">
                         <span className="font-bold">{idx + 1}.</span>
                         <div className="w-full">
-                          <p className="mb-1 text-justify">
+                          <p className="mb-0.5 text-justify">
                             {q.sentence.replace('______', '__________')}
                           </p>
-                          <div className="flex flex-wrap gap-x-8 gap-y-1">
+                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 paper-options">
                             {q.options.map((opt: string, oIdx: number) => (
                               <span key={oIdx}>
                                 ({getOptionLabel(oIdx)}) {opt}
@@ -588,28 +590,29 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="break-before-page mt-10 pt-10 border-t-2 border-dashed border-slate-300 print:border-none"></div>
+              {/* ✅ 縮短 page break 空白 */}
+              <div className="break-before-page mt-4 pt-4 border-t border-dashed border-slate-300 print:border-none"></div>
 
               {/* --- ANSWER KEY SHEET --- */}
-              <div className="print-section">
-                <div className="border-b-2 border-black pb-2 mb-2">
-                  <h1 className="text-xl font-bold text-center">Answer Key & Analysis</h1>
-                  <p className="text-center text-sm">
+              <div className="print-section paper-answer-key">
+                <div className="border-b-2 border-black pb-1 mb-1">
+                  <h1 className="text-lg font-bold text-center">Answer Key & Analysis</h1>
+                  <p className="text-center text-xs">
                     Level {selectedLevel} Unit(s) {selectedUnits.join(', ')}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[10pt]">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[9pt] leading-tight">
                   {quizData.map((q, idx) => {
                     const correctIndex = q.options.indexOf(q.word);
                     return (
-                      <div key={idx} className="flex gap-2 break-inside-avoid border-b border-slate-100 pb-1">
-                        <div className="font-bold w-6 text-base">{idx + 1}.</div>
-                        <div className="w-6 font-bold text-base">({getOptionLabel(correctIndex)})</div>
+                      <div key={idx} className="flex gap-1 break-inside-avoid border-b border-slate-100 pb-0.5">
+                        <div className="font-bold w-5">{idx + 1}.</div>
+                        <div className="w-5 font-bold">({getOptionLabel(correctIndex)})</div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold underline mb-0.5">{q.word}</div>
-                          <div className="flex flex-wrap gap-2 text-slate-600 text-[9pt]">
-                            <span className="italic font-serif">{q.pos}</span>
+                          <div className="font-bold underline">{q.word}</div>
+                          <div className="flex flex-wrap gap-1 text-slate-700">
+                            <span className="italic">{q.pos}</span>
                             <span>{q.meaning}</span>
                             <span className="text-slate-400 font-sans tracking-tight">
                               L{q.level}-U{q.unit}
@@ -630,11 +633,13 @@ export default function Home() {
       {/* Global Print Styles */}
       <style jsx global>{`
         @media print {
-          @page { margin: 1cm; size: A4; }
+          @page { margin: 0.6cm; size: A4; }
           body { background: white; color: black; }
           .break-before-page { page-break-before: always; }
           .break-inside-avoid { page-break-inside: avoid; }
           .print-section { font-family: "Times New Roman", Times, serif; }
+          .paper-questions { font-size: 11pt; line-height: 1.35; }
+          .paper-answer-key { font-size: 9pt; line-height: 1.2; }
           ::-webkit-scrollbar { display: none; }
         }
       `}</style>
