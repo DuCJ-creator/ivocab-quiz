@@ -303,8 +303,8 @@ export default function Home() {
 
             <div className="mt-8 pt-6 border-t border-slate-100 text-center px-4">
               <p className="text-xs text-slate-500 italic leading-relaxed">
-                Kindly note that the reading materials are thoughtfully crafted by AI—and while every effort is made for accuracy, occasional slips may still occur.<br/>
-                敬請留意：本閱讀材料由人工智慧精心生成，雖力求準確，偶有疏漏仍在所難免。
+                Kindly note that the quiz questions are thoughtfully crafted by AI—and while every effort is made for accuracy, occasional slips may still occur.<br/>
+                敬請留意：本測驗題由人工智慧精心生成，雖力求準確，偶有疏漏仍在所難免。
               </p>
             </div>
           </div>
