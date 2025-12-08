@@ -431,6 +431,21 @@ export default function Home() {
            </div>
         )}
 
+const correctCount = SCORE.correct;   
+const missionName  = "iVocab 考題";     
+
+window.opener?.postMessage({
+  type: "LUNAR_RESULT",
+  correctCount,
+  mission: missionName
+}, "*");
+
+// 同時寫一份 localStorage 保底
+localStorage.setItem("lunar_pending_result", JSON.stringify({
+  type:"LUNAR_RESULT",
+  correctCount,
+  mission: missionName
+}));
       </main>
 
       {/* Global Print Styles */}
