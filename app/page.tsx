@@ -340,14 +340,17 @@ export default function Home() {
             </div>
             <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8 md:p-10">
               <h3 className="text-xl font-serif leading-relaxed mb-8">
-                {quizData[currentQIndex].sentence.split('______').map((part: string, i: number) => (
-                  <span key={i}>
-                    {part}
-                    {i === 0 && (
-                      <span className="inline-block w-32 border-b-2 border-slate-800 mx-2 relative top-1"></span>
-                    )}
-                  </span>
-                ))}
+{(() => {
+  const parts = quizData[currentQIndex].sentence.split('______');
+
+  return (
+    <>
+      {parts[0]}
+      <span className="inline-block w-32 border-b-2 border-slate-800 mx-2 relative top-1"></span>
+      {parts.slice(1).join('')}
+    </>
+  );
+})()}
               </h3>
               <div className="mt-2 mb-7 text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded inline-block">
                 Hint: {quizData[currentQIndex].pos}
