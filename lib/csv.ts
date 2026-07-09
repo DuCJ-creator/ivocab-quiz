@@ -11,7 +11,7 @@ export interface VocabWord {
 }
 
 export const fetchAndParseCSV = async (level: number): Promise<VocabWord[]> => {
-  const url = `https://raw.githubusercontent.com/DuCJ-creator/iVocab-Self-Practice/main/level${level}.csv`;
+  const url = `/data/level${level}.csv`;
   
   try {
     const response = await fetch(url);
