@@ -52,13 +52,6 @@ export default function Home() {
   // Paper specific state
   const paperRef = useRef<HTMLDivElement>(null);
 
-  // ✅ Lunar badge status
-  const [lunarLinked, setLunarLinked] = useState(false);
-
-  useEffect(() => {
-    setLunarLinked(!!window.opener);
-  }, []);
-
   // Load Data
   useEffect(() => {
     const loadData = async () => {
@@ -163,29 +156,6 @@ export default function Home() {
   const getWordInfo = (word: string) =>
     fullData.find(w => w.word === word);
 
-  // ✅ Lunar MoonBox 回報（只在 online result 時送）
-  useEffect(() => {
-    if (mode !== 'online' || step !== 'result' || quizData.length === 0) return;
-
-    const correct = calculateScore();
-
-    try {
-      window.opener?.postMessage({
-        type: "LUNAR_MISSION_RESULT",
-        correct,
-        mission: "iVocab 考題"
-      }, "*");
-    } catch (e) {}
-
-    try {
-      localStorage.setItem("lunar_pending_result", JSON.stringify({
-        type: "LUNAR_MISSION_RESULT",
-        correct,
-        mission: "iVocab 考題"
-      }));
-    } catch (e) {}
-  }, [mode, step, quizData, userAnswers]);
-
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 print:bg-white">
       {/* Navigation - Hidden when printing */}
@@ -206,13 +176,6 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* ✅ Lunar badge */}
-            <div className={`text-xs font-bold px-3 py-2 rounded-full border 
-              ${lunarLinked ? "bg-emerald-500/15 border-emerald-300/30 text-emerald-200"
-                            : "bg-white/5 border-white/10 text-slate-300"}`}>
-              🌙 {lunarLinked ? "月光任務已連線" : "請從月光寶盒進入"}
-            </div>
-
             {step !== 'setup' && (
               <button
                 onClick={() => window.location.reload()}
@@ -605,7 +568,8 @@ export default function Home() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[9pt] leading-tight">
+                {/* 單欄排版：避免兩欄並排導致 PDF 文字擷取/OCR 時題號與答案錯位對應 */}
+                <div className="grid grid-cols-1 gap-x-4 gap-y-0.5 text-[9pt] leading-tight">
                   {quizData.map((q, idx) => {
                     const correctIndex = q.options.indexOf(q.word);
                     return (
