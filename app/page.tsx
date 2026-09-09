@@ -52,11 +52,27 @@ export default function Home() {
   // Paper specific state
   const paperRef = useRef<HTMLDivElement>(null);
 
+  // Cache of already-fetched levels, so backfilling distractors from earlier
+  // levels doesn't re-download the same CSV every time a quiz is generated.
+  const csvCache = useRef<Record<number, VocabWord[]>>({});
+
+  const loadLevelData = async (level: number): Promise<VocabWord[]> => {
+    if (!csvCache.current[level]) {
+      try {
+        csvCache.current[level] = await fetchAndParseCSV(level);
+      } catch (err) {
+        console.error(`Failed to load CSV for level ${level}:`, err);
+        csvCache.current[level] = [];
+      }
+    }
+    return csvCache.current[level];
+  };
+
   // Load Data
   useEffect(() => {
     const loadData = async () => {
       setIsLoadingCSV(true);
-      const data = await fetchAndParseCSV(selectedLevel);
+      const data = await loadLevelData(selectedLevel);
       setFullData(data);
       const units = [...new Set(data.map(item => parseInt(item.unit)))]
         .sort((a, b) => a - b);
@@ -97,33 +113,42 @@ export default function Home() {
     // Prepare target words
     const targets = shuffleArray(unitWords).slice(0, targetCount);
 
+    // Build a cross-level word bank so the API can backfill POS-matched
+    // distractors from earlier levels/units when the current unit doesn't
+    // have enough same-POS words to fill out the multiple-choice options.
+    let wordBank: VocabWord[] = fullData;
+    if (selectedLevel > 1) {
+      const earlierLevels = await Promise.all(
+        Array.from({ length: selectedLevel - 1 }, (_, i) => loadLevelData(i + 1))
+      );
+      wordBank = [...earlierLevels.flat(), ...fullData];
+    }
+
     try {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ words: targets })
+        body: JSON.stringify({ words: targets, wordBank })
       });
 
       if (!response.ok) throw new Error("API Error");
 
-      const { questions } = await response.json();
+      const { questions, failedWords } = await response.json();
+
+      if (failedWords && failedWords.length > 0) {
+        console.warn("Some words failed to generate valid questions:", failedWords);
+      }
 
       const finalQuiz = questions.map((q: any) => {
         const originalWordObj = targets.find(t => t.word === q.word);
         if (!originalWordObj) return null;
 
-        // Generate Distractors
-        let pool = unitWords.filter(w => w.word !== q.word);
-        // If unit pool is too small, expand to full level
-        if (pool.length < 3) pool = fullData.filter(w => w.word !== q.word);
-
-        const distractors = shuffleArray(pool).slice(0, 3).map(w => w.word);
-        const options = shuffleArray([q.word, ...distractors]);
-
         return {
           ...originalWordObj,
           sentence: q.sentence,
-          options
+          // Use the options the API already built: same POS as the target,
+          // deduped, and backfilled from earlier units/levels when needed.
+          options: q.options,
         };
       }).filter(Boolean);
 
