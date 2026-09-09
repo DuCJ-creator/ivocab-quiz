@@ -175,6 +175,56 @@ function containsWholeWord(sentence: string, word: string): boolean {
   return re.test(sentence);
 }
 
+// -------------------------------------------------------------------------
+// GRAMMATICAL FORM SAFETY NET
+// The multiple-choice options are always shown in the word's exact
+// dictionary/base form (no -s, -ed, -ing, plural -s). So the sentence must
+// be built so that dropping in that bare form is grammatically correct.
+// e.g. "She has always ______ me to take my umbrella" is WRONG for "remind"
+// — it needs "reminded" (past participle), and "remind" alone doesn't fit.
+// This can't be caught by a pure POS check, since "remind" IS a verb slot;
+// the problem is the required inflection, not the part of speech.
+// -------------------------------------------------------------------------
+
+const PAST_TIME_CONTEXT =
+  /\b(yesterday|last (night|week|month|year|summer|winter)|\bago\b|in \d{4})\b/i;
+
+/** Returns true if the bare/base verb form plausibly fits the blank. */
+function verbFormRiskCheck(sentenceWithBlank: string): boolean {
+  const s = sentenceWithBlank;
+
+  // Hard disqualifiers: these constructions require an inflected form
+  // (past participle or -ing), so the bare dictionary form cannot fit.
+  if (/\b(has|have|had)\s+(\w+\s+){0,2}______\b/i.test(s)) return false; // perfect tenses
+  if (/\b(is|are|was|were|been|being)\s+(\w+\s+){0,2}______\b/i.test(s)) return false; // passive/progressive
+
+  // Constructions where the bare form is definitely correct.
+  const safe =
+    /\bto\s+______\b/i.test(s) || // infinitive
+    /\b(can|could|will|would|shall|should|may|might|must)\s+(\w+\s+)?______\b/i.test(s) || // modal
+    /^\s*______\b/.test(s) || // imperative, blank opens the sentence
+    /\b(do|does|did|don'?t|doesn'?t|didn'?t|do not|does not|did not)\s+(\w+\s+)?______\b/i.test(s) || // do-support
+    /\b(i|you|we|they)\s+(\w+\s+){0,1}______\b/i.test(s); // subjects that take the base form in present simple
+
+  if (safe) return true;
+
+  // Otherwise, flag likely trouble: a 3rd-person-singular-looking subject
+  // driving the blank with no modal/do-support (would need -s), or an
+  // unguarded past-time context (would need -ed).
+  const thirdPersonNearBlank = /\b(he|she|it|[A-Z][a-z]+)\s+(\w+\s+){0,2}______\b/.test(s);
+  const pastTimeContext = PAST_TIME_CONTEXT.test(s);
+  return !(thirdPersonNearBlank || pastTimeContext);
+}
+
+/** Returns true if the bare/singular noun form plausibly fits the blank. */
+function nounFormRiskCheck(sentenceWithBlank: string): boolean {
+  // Quantifiers/numbers right before the blank usually demand a plural noun,
+  // which the bare dictionary form (assumed singular) won't satisfy.
+  const pluralTrigger =
+    /\b(many|several|few|both|various|numerous|two|three|four|five|six|seven|eight|nine|ten)\s+______\b/i;
+  return !pluralTrigger.test(sentenceWithBlank);
+}
+
 // =========================================================================
 // DISTRACTOR SELECTION
 // - Same POS as the target (required).
@@ -271,7 +321,7 @@ You are an English teacher generating a fill-in-the-blank (cloze) vocabulary qui
 
 STRICT RULES — follow every one without exception:
 
-1. PART OF SPEECH (POS) — MOST IMPORTANT RULE:
+1. PART OF SPEECH (POS):
    - Each word has a DESIGNATED POS. Use it ONLY as that POS.
    - Noun → the blank must be a noun slot (subject, object, or after a determiner).
    - Verb → the blank must be a finite verb or infinitive slot.
@@ -279,22 +329,30 @@ STRICT RULES — follow every one without exception:
    - Adverb → the blank must modify a verb, adjective, or whole clause.
    - If the word is multi-POS (e.g. "light" can be noun/verb/adjective), write the sentence so ONLY the designated POS fits grammatically.
 
-2. DIFFICULTY MUST MATCH EACH WORD'S LEVEL (see per-word spec below):
+2. GRAMMATICAL FORM — CRITICAL, THIS CAUSES REAL ERRORS:
+   - The multiple-choice options will show each word in its exact BARE DICTIONARY FORM — no "-s", "-ed", "-ing", or plural "-s" added. The sentence must be written so that inserting that bare form is 100% grammatically correct.
+   - For VERBS specifically, avoid any context that forces conjugation. BANNED patterns: present perfect ("has/have/had ______"), passive or progressive voice ("is/are/was/were ______"), simple past ("______ed" contexts, e.g. anything with "yesterday", "last week", "ago"), and third-person singular present simple with a bare subject and no modal (e.g. "She ______ him every day" — this needs "reminds", not "remind").
+     - SAFE verb constructions: infinitive ("wants to ______", "in order to ______"), modal + verb ("should/must/can/will ______"), imperative ("Please ______ ..."), do-support ("Does she ______...?", "They don't ______..."), or a subject that takes the bare form in present simple ("I/you/we/they ______ ...").
+     - WRONG example: "She has always ______ me to take my umbrella when it rains." (for "remind") — "remind" doesn't fit; it would need "reminded". Either use a modal ("She should always ______ me...") or restructure entirely.
+   - For NOUNS, avoid contexts that force a plural (e.g. "many/several/two/three ______") unless the word is naturally used that way in its base form; prefer singular/countable-with-article ("a/an/the ______") or uncountable contexts.
+   - For ADJECTIVES/ADVERBS, avoid comparative/superlative contexts ("more ______ than", "the ______est") since the bare form usually can't take "-er"/"-est" endings directly.
+
+3. DIFFICULTY MUST MATCH EACH WORD'S LEVEL (see per-word spec below):
    - Sentence length, vocabulary band (CEFR), and grammar complexity are specified per word. Follow them exactly — do not default to a single generic difficulty for every item.
 
-3. UNIQUE CORRECT ANSWER — CRITICAL:
+4. UNIQUE CORRECT ANSWER — CRITICAL:
    - Each question lists distractor words that will be shown as the other multiple-choice options.
    - The distractors share the SAME part of speech as the target, so grammar alone won't rule them out.
    - You must write the sentence so that the CONTEXT / MEANING clearly rules out every distractor — only the target word makes logical sense in the blank. Think about what each distractor would mean in that slot and make sure it is clearly wrong.
    - Do NOT use any of the distractor words anywhere else in the sentence.
 
-4. CONTEXT CLUES: The sentence must contain enough context so a student can infer the meaning of the blank from surrounding words alone.
+5. CONTEXT CLUES: The sentence must contain enough context so a student can infer the meaning of the blank from surrounding words alone.
 
-5. NO REPETITION: Vary sentence topics, subjects, and grammatical structures across the full set.
+6. NO REPETITION: Vary sentence topics, subjects, and grammatical structures across the full set.
 
-6. The target word appears exactly once, replaced by "______" (six underscores).
+7. The target word appears exactly once, replaced by "______" (six underscores).
 
-7. Output STRICT JSON only — no markdown, no extra text.
+8. Output STRICT JSON only — no markdown, no extra text.
 
 Words to write questions for:
 ${batch.map(buildWordBlock).join("\n\n")}
@@ -308,6 +366,7 @@ Return exactly:
 
 Self-check before outputting — for EACH sentence verify:
 □ Is the blank in the correct POS slot for the designated POS?
+□ Would the word's BARE DICTIONARY FORM (no -s/-ed/-ing/plural) be 100% grammatical in the blank? (Check especially: no present perfect "has/have/had ___", no passive/progressive "is/are/was/were ___", no unguarded 3rd-person-singular subject, no past-time context like "yesterday"/"ago" without a modal.)
 □ Is the sentence within the specified word-count range for that word's level?
 □ Are all non-target words within the specified CEFR band?
 □ Would every listed distractor be clearly WRONG if substituted into the blank?
@@ -343,6 +402,13 @@ function postValidateQuestions(
 
     // POS slot check
     if (!roughPosCheck(pw.pos, q.sentence)) continue;
+
+    // Grammatical-form safety net: the options are shown in bare dictionary
+    // form, so reject sentences whose grammar would require an inflected
+    // form (e.g. "has always ______" needing a past participle).
+    const posLower = pw.pos.toLowerCase();
+    if (posLower === "verb" && !verbFormRiskCheck(q.sentence)) continue;
+    if (posLower === "noun" && !nounFormRiskCheck(q.sentence)) continue;
 
     // Level-scaled length check
     const cfg = getLevelConfig(pw.level);
